@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import pandas as pd
 import yfinance as yf
+
+_INTRADAY_INTERVALS = {"1m", "5m", "15m", "30m", "1h", "4h"}
 
 # ── interval → (yf_interval, default_period) ──────────────────────────────────
 INTERVAL_MAP: dict[str, tuple[str, str]] = {
@@ -74,6 +78,22 @@ def _stooq_fallback(ticker: str) -> pd.DataFrame:
     except Exception:
         pass
     return pd.DataFrame()
+
+
+def _rows_with_epoch_time(rows: list[dict]) -> list[dict]:
+    """Turn the 'YYYY-MM-DDTHH:MM' wall-clock string used for intraday rows into a
+    UNIX timestamp (seconds). lightweight-charts renders intraday series using a
+    numeric UTCTimestamp — handing it that string instead throws inside the
+    library once time-of-day resolution is involved. Interpreting the wall-clock
+    string as UTC keeps the displayed hour/minute unchanged (the library shows
+    UTCTimestamp values in UTC), it just moves the parsing our side."""
+    for r in rows:
+        r["date"] = int(
+            datetime.strptime(r["date"], "%Y-%m-%dT%H:%M")
+            .replace(tzinfo=timezone.utc)
+            .timestamp()
+        )
+    return rows
 
 
 def _df_to_rows(df: pd.DataFrame, interval: str) -> list[dict]:
@@ -158,6 +178,9 @@ def get_chart_payload(
 
     if not rows:
         raise FileNotFoundError(f"No usable rows for '{ticker}'.")
+
+    if interval in _INTRADAY_INTERVALS:
+        rows = _rows_with_epoch_time(rows)
 
     name, isin = _get_name_and_isin(ticker)
     return {

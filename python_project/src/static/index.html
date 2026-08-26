@@ -1431,6 +1431,12 @@ function _drawVP(rows,container){
   ctx.fillText('POC',W-2,pocY+3);
 }
 
+function _fmtTooltipTime(t){
+  if(typeof t!=='number')return t;
+  const d=new Date(t*1000),pad=n=>String(n).padStart(2,'0');
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+}
+
 function _setupTooltip(rows){
   const tt=document.createElement('div');
   tt.id='lw-tt';
@@ -1443,7 +1449,7 @@ function _setupTooltip(rows){
     const row=rows.find(r=>r.date===param.time)||{};
     const chg=d.open?((d.close-d.open)/d.open*100).toFixed(2):'—';
     const cc=chg>=0?'#10b981':'#ef4444';
-    tt.innerHTML=`<div style="color:#64748b;font-size:.68rem;margin-bottom:4px">${param.time}</div>
+    tt.innerHTML=`<div style="color:#64748b;font-size:.68rem;margin-bottom:4px">${_fmtTooltipTime(param.time)}</div>
       <div style="display:grid;grid-template-columns:auto 1fr;gap:1px 8px">
         <span style="color:#64748b">O</span><span>${d.open?.toFixed(4)??'—'}</span>
         <span style="color:#64748b">H</span><span style="color:#10b981">${d.high?.toFixed(4)??'—'}</span>

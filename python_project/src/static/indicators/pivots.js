@@ -12,7 +12,11 @@
     } else {
       const byDay = new Map();
       valid.forEach(row => {
-        const day = String(row.date).slice(0, 10);
+        // Intraday rows carry a UTC epoch-seconds number; daily+ rows carry a
+        // 'YYYY-MM-DD[THH:MM]' string — derive the calendar day from either.
+        const day = typeof row.date === "number"
+          ? new Date(row.date * 1000).toISOString().slice(0, 10)
+          : String(row.date).slice(0, 10);
         byDay.set(day, [...(byDay.get(day) || []), row]);
       });
       const days = [...byDay.keys()].sort();
