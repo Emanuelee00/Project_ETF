@@ -1005,6 +1005,21 @@ class OptimizeRequest(BaseModel):
     top_n: int = 10
 
 
+def _composite_score(bt: dict) -> float:
+    """Return-per-drawdown score, damped by a trade-count confidence factor.
+
+    Without this, a config validated on just 1-2 trades and a tiny drawdown
+    can score far higher than one with a dozen trades and a strong win rate,
+    simply for having gotten lucky on a statistically insignificant sample.
+    Full confidence kicks in at >=10 trades; below that the raw score is
+    scaled down proportionally.
+    """
+    dd = abs(bt["max_drawdown"]) or 0.01
+    raw = (bt["total_return_pct"] * bt["win_rate"]) / dd
+    confidence = min(bt["num_trades"] / 10, 1.0)
+    return raw * confidence
+
+
 @app.post("/api/strategy/optimize")
 async def strategy_optimize(req: OptimizeRequest):
     """
@@ -1040,8 +1055,7 @@ async def strategy_optimize(req: OptimizeRequest):
                             ))
                             if bt["num_trades"] < 2:
                                 continue
-                            dd = abs(bt["max_drawdown"]) or 0.01
-                            score = (bt["total_return_pct"] * bt["win_rate"]) / dd
+                            score = _composite_score(bt)
                             results.append({
                                 "rsi_period":   rp,
                                 "oversold":     os_,
@@ -1078,9 +1092,7 @@ async def strategy_optimize(req: OptimizeRequest):
                         ))
                         if bt["num_trades"] < 2:
                             continue
-                        # Composite score: balances return, win-rate, and drawdown
-                        dd = abs(bt["max_drawdown"]) or 0.01
-                        score = (bt["total_return_pct"] * bt["win_rate"]) / dd
+                        score = _composite_score(bt)
                         results.append({
                             "short_ma":     sm,
                             "long_ma":      lm,
