@@ -6,9 +6,10 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc libffi-dev && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies via uv (pyproject.toml / uv.lock)
+RUN pip install --no-cache-dir uv
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev
 
 # Copy source
 COPY . .
@@ -20,4 +21,4 @@ EXPOSE 8000
 
 ENV ETF_PORT=8000
 
-CMD ["python", "src/server.py"]
+CMD ["uv", "run", "python", "src/server.py"]

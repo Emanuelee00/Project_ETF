@@ -560,11 +560,19 @@ html[dir=rtl] .nav-right{flex-direction:row-reverse}
   <!-- ═══ STRATEGY VIEW ═══ -->
   <div id="view-strategy" class="view">
     <div class="st-sidebar">
-      <div class="c-section">⚡ <span data-i18n="stTitle">Strategia crossover MA multi-asset</span></div>
+      <div class="c-section">⚡ <span data-i18n="stTitle">Strategie di Trading</span></div>
 
       <div>
         <label class="st-label" data-i18n="stPresets">STRATEGIE</label>
         <div id="st-presets" class="st-presets"></div>
+      </div>
+
+      <div>
+        <label class="st-label" data-i18n="stEngine">TIPO STRATEGIA</label>
+        <div class="st-grid2">
+          <button type="button" class="tf-btn on" id="st-engine-ma" style="width:100%" onclick="setStrategyType('ma_cross')" data-i18n="stEngineMa">MA Crossover</button>
+          <button type="button" class="tf-btn" id="st-engine-rsi" style="width:100%" onclick="setStrategyType('rsi')" data-i18n="stEngineRsi">RSI Mean-Rev</button>
+        </div>
       </div>
 
       <div>
@@ -594,26 +602,43 @@ html[dir=rtl] .nav-right{flex-direction:row-reverse}
         </div>
       </div>
 
-      <div class="st-grid2">
-        <div>
-          <label class="st-label" data-i18n="stShortMa">MA VELOCE</label>
-          <input id="st-short-ma" class="st-inp" type="number" value="10" min="2" max="200" style="text-align:center">
+      <div id="st-ma-fields">
+        <div class="st-grid2">
+          <div>
+            <label class="st-label" data-i18n="stShortMa">MA VELOCE</label>
+            <input id="st-short-ma" class="st-inp" type="number" value="10" min="2" max="200" style="text-align:center">
+          </div>
+          <div>
+            <label class="st-label" data-i18n="stLongMa">MA LENTA</label>
+            <input id="st-long-ma" class="st-inp" type="number" value="50" min="5" max="500" style="text-align:center">
+          </div>
         </div>
-        <div>
-          <label class="st-label" data-i18n="stLongMa">MA LENTA</label>
-          <input id="st-long-ma" class="st-inp" type="number" value="50" min="5" max="500" style="text-align:center">
-        </div>
-      </div>
-
-      <div class="st-grid2">
-        <div>
-          <label class="st-label" data-i18n="stRisk">RISCHIO %</label>
-          <input id="st-risk" class="st-inp" type="number" value="2" min="0.1" max="100" step="0.1" style="text-align:center">
-        </div>
-        <div>
+        <div style="margin-top:10px">
           <label class="st-label" data-i18n="stRr">R:R RATIO</label>
           <input id="st-rr" class="st-inp" type="number" value="2" min="0.1" max="20" step="0.1" style="text-align:center">
         </div>
+      </div>
+
+      <div id="st-rsi-fields" style="display:none">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <div>
+            <label class="st-label" data-i18n="stRsiPeriod">PERIODO RSI</label>
+            <input id="st-rsi-period" class="st-inp" type="number" value="14" min="2" max="100" style="text-align:center">
+          </div>
+          <div>
+            <label class="st-label" data-i18n="stRsiOversold">IPERVENDUTO</label>
+            <input id="st-rsi-oversold" class="st-inp" type="number" value="30" min="1" max="49" style="text-align:center">
+          </div>
+          <div>
+            <label class="st-label" data-i18n="stRsiOverbought">IPERCOMPRATO</label>
+            <input id="st-rsi-overbought" class="st-inp" type="number" value="70" min="51" max="99" style="text-align:center">
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label class="st-label" data-i18n="stRisk">RISCHIO %</label>
+        <input id="st-risk" class="st-inp" type="number" value="2" min="0.1" max="100" step="0.1" style="text-align:center">
       </div>
 
       <div class="st-grid2">
@@ -631,7 +656,7 @@ html[dir=rtl] .nav-right{flex-direction:row-reverse}
         <input id="st-commission" class="st-inp" type="number" value="0" min="0" max="100" step="0.01" style="text-align:center">
       </div>
 
-      <div class="st-grid2" style="margin-bottom:6px">
+      <div class="st-grid2" style="margin-bottom:6px" id="st-ma-filters">
         <label style="display:flex;align-items:center;gap:5px;font-size:.72rem;color:var(--muted);cursor:pointer">
           <input type="checkbox" id="st-use-rsi" checked style="accent-color:var(--cyan)">
           <span data-i18n="stUseRsi">Filtro RSI</span>
@@ -698,7 +723,7 @@ html[dir=rtl] .nav-right{flex-direction:row-reverse}
           </div>
           <div class="table-wrap" style="border:none">
             <table style="width:100%;font-size:.78rem">
-              <thead><tr>
+              <thead><tr id="st-opt-thead-row">
                 <th style="color:var(--cyan);padding:5px 8px">#</th>
                 <th style="color:var(--cyan);padding:5px 8px" data-i18n-col="short">MA Fast</th>
                 <th style="color:var(--cyan);padding:5px 8px" data-i18n-col="long">MA Slow</th>
@@ -727,7 +752,7 @@ const T = {
   it:{subtitle:"Carica il portafoglio · Analisi completa · Report Excel professionale",dropLabel:"Trascina qui il file Excel",dropHint:'o <span id="browse-link">sfoglia</span> — .xlsx / .xls',tagReady:"pronto",analyzeBtn:"🚀 Avvia Analisi Completa",ph0:"Download",ph1:"Validazione",ph2:"Metriche",ph3:"Ottimizzazione",ph4:"Export",kpiA:"Asset Analizzati",kpiS:"Sharpe Medio",kpiV:"Volatilità Media",kpiD:"Drawdown Medio",dlBtn:"📥 Scarica Report Excel",secMetrics:"Metriche Dettagliate",newBtn:"🔄 Nuova Analisi",errFmt:"Formato non valido (.xlsx/.xls)",errUp:"Errore upload",errConn:"Connessione persa",gsTitle:"Cerca qualsiasi titolo",gsSubtitle:"Ricerca globale: azioni, ETF, indici, materie prime",navSearch:"Ricerca",navNews:"News",navStrategy:"Strategy",
     colName:"Nome",colIsin:"ISIN",colCountry:"Paese",colPerf1:"Perf 1A",colPerf3:"Perf 3A",colPerf5:"Perf 5A",colCagr3:"CAGR 3A",colVol:"Vol 1A",colSharpe:"Sharpe",colBeta:"Beta",colDD:"Drawdown",colSignal:"Segnale",
     indTitle:"Indicatori",indPeriod:"periodo",indPivot:"Pivot Points",indRefresh:"↻ Aggiorna",backDash:"← Dashboard",
-    stTitle:"Strategia crossover MA multi-asset",stPresets:"STRATEGIE",stAsset:"ASSET / TICKER",stPeriod:"PERIODO",stShortMa:"MA VELOCE",stLongMa:"MA LENTA",stRisk:"RISCHIO %",stRr:"R:R RATIO",stSpread:"SPREAD (pts/lato)",stSlippage:"SLIPPAGE (pts/lato)",stCommission:"COMMISSIONI (%/lato)",stRunBtn:"▶ RUN BACKTEST",stOptBtn:"🔍 Trova configurazioni migliori",stResults:"Risultati",stProfit:"Profitto",stWinRate:"Win Rate",stTrades:"Trade",stMaxDd:"Max DD",st3mo:"3 Mesi",st6mo:"6 Mesi",st1y:"1 Anno",st2y:"2 Anni",st5y:"5 Anni",st10y:"10 Anni",
+    stTitle:"Strategie di Trading",stEngine:"TIPO STRATEGIA",stEngineMa:"MA Crossover",stEngineRsi:"RSI Mean-Rev",stRsiPeriod:"PERIODO RSI",stRsiOversold:"IPERVENDUTO",stRsiOverbought:"IPERCOMPRATO",stPresets:"STRATEGIE",stAsset:"ASSET / TICKER",stPeriod:"PERIODO",stShortMa:"MA VELOCE",stLongMa:"MA LENTA",stRisk:"RISCHIO %",stRr:"R:R RATIO",stSpread:"SPREAD (pts/lato)",stSlippage:"SLIPPAGE (pts/lato)",stCommission:"COMMISSIONI (%/lato)",stRunBtn:"▶ RUN BACKTEST",stOptBtn:"🔍 Trova configurazioni migliori",stResults:"Risultati",stProfit:"Profitto",stWinRate:"Win Rate",stTrades:"Trade",stMaxDd:"Max DD",st3mo:"3 Mesi",st6mo:"6 Mesi",st1y:"1 Anno",st2y:"2 Anni",st5y:"5 Anni",st10y:"10 Anni",
     stRoulette:"ULTIME 40 OPERAZIONI — verde=win / rosso=loss (destra→sinistra)",stPlaceholder:"Configura i parametri e avvia il backtest",stOptResults:"Top Configurazioni",stSortScore:"Score",stSortTrades:"Più trade",
     stUseRsi:"Filtro RSI",stUseTrend:"Filtro trend (200MA)",
     stOptCol:{short:"MA Veloce",long:"MA Lenta",ret:"Return %",wr:"Win%",tr:"Trade",dd:"Max DD%",sharpe:"Sharpe",score:"Score"},
@@ -737,7 +762,7 @@ const T = {
   en:{subtitle:"Upload your portfolio · Complete analysis · Professional Excel report",dropLabel:"Drop Excel file here",dropHint:'or <span id="browse-link">browse</span> — .xlsx / .xls',tagReady:"ready",analyzeBtn:"🚀 Start Full Analysis",ph0:"Download",ph1:"Validation",ph2:"Metrics",ph3:"Optimization",ph4:"Export",kpiA:"Analyzed Assets",kpiS:"Avg Sharpe",kpiV:"Avg Volatility",kpiD:"Avg Drawdown",dlBtn:"📥 Download Excel Report",secMetrics:"Detailed Metrics",newBtn:"🔄 New Analysis",errFmt:"Invalid format (.xlsx/.xls)",errUp:"Upload error",errConn:"Connection lost",gsTitle:"Search any asset",gsSubtitle:"Global search: stocks, ETFs, indices, commodities",navSearch:"Search",navNews:"News",navStrategy:"Strategy",
     colName:"Name",colIsin:"ISIN",colCountry:"Country",colPerf1:"Perf 1Y",colPerf3:"Perf 3Y",colPerf5:"Perf 5Y",colCagr3:"CAGR 3Y",colVol:"Vol 1Y",colSharpe:"Sharpe",colBeta:"Beta",colDD:"Drawdown",colSignal:"Signal",
     indTitle:"Indicators",indPeriod:"period",indPivot:"Pivot Points",indRefresh:"↻ Refresh",backDash:"← Dashboard",
-    stTitle:"Multi-Asset MA Crossover Strategy",stPresets:"STRATEGIES",stAsset:"ASSET / TICKER",stPeriod:"PERIOD",stShortMa:"FAST MA",stLongMa:"SLOW MA",stRisk:"RISK %",stRr:"R:R RATIO",stSpread:"SPREAD (pts/side)",stSlippage:"SLIPPAGE (pts/side)",stCommission:"COMMISSION (%/side)",stRunBtn:"▶ RUN BACKTEST",stOptBtn:"🔍 Find best configurations",stResults:"Results",stProfit:"Profit",stWinRate:"Win Rate",stTrades:"Trades",stMaxDd:"Max DD",st3mo:"3 Months",st6mo:"6 Months",st1y:"1 Year",st2y:"2 Years",st5y:"5 Years",st10y:"10 Years",
+    stTitle:"Trading Strategies",stEngine:"STRATEGY TYPE",stEngineMa:"MA Crossover",stEngineRsi:"RSI Mean-Rev",stRsiPeriod:"RSI PERIOD",stRsiOversold:"OVERSOLD",stRsiOverbought:"OVERBOUGHT",stPresets:"STRATEGIES",stAsset:"ASSET / TICKER",stPeriod:"PERIOD",stShortMa:"FAST MA",stLongMa:"SLOW MA",stRisk:"RISK %",stRr:"R:R RATIO",stSpread:"SPREAD (pts/side)",stSlippage:"SLIPPAGE (pts/side)",stCommission:"COMMISSION (%/side)",stRunBtn:"▶ RUN BACKTEST",stOptBtn:"🔍 Find best configurations",stResults:"Results",stProfit:"Profit",stWinRate:"Win Rate",stTrades:"Trades",stMaxDd:"Max DD",st3mo:"3 Months",st6mo:"6 Months",st1y:"1 Year",st2y:"2 Years",st5y:"5 Years",st10y:"10 Years",
     stRoulette:"LAST 40 TRADES — green=win / red=loss (right→left)",stPlaceholder:"Configure parameters and run backtest",stOptResults:"Top Configurations",stSortScore:"Score",stSortTrades:"Most trades",
     stUseRsi:"RSI Filter",stUseTrend:"Trend filter (200MA)",
     stOptCol:{short:"Fast MA",long:"Slow MA",ret:"Return %",wr:"Win%",tr:"Trades",dd:"Max DD%",sharpe:"Sharpe",score:"Score"},
@@ -747,7 +772,7 @@ const T = {
   fr:{subtitle:"Chargez votre portefeuille · Analyse complète · Rapport Excel",dropLabel:"Déposez le fichier Excel ici",dropHint:'ou <span id="browse-link">parcourir</span> — .xlsx / .xls',tagReady:"prêt",analyzeBtn:"🚀 Lancer l'Analyse",ph0:"Téléchargement",ph1:"Validation",ph2:"Métriques",ph3:"Optimisation",ph4:"Export",kpiA:"Actifs Analysés",kpiS:"Sharpe Moyen",kpiV:"Volatilité",kpiD:"Drawdown",dlBtn:"📥 Télécharger Rapport",secMetrics:"Métriques Détaillées",newBtn:"🔄 Nouvelle Analyse",errFmt:"Format invalide",errUp:"Erreur upload",errConn:"Connexion perdue",gsTitle:"Rechercher un titre",gsSubtitle:"Recherche globale: actions, ETF, indices, matières premières",navSearch:"Recherche",navNews:"Actualités",navStrategy:"Stratégie",
     colName:"Nom",colIsin:"ISIN",colCountry:"Pays",colPerf1:"Perf 1A",colPerf3:"Perf 3A",colPerf5:"Perf 5A",colCagr3:"CAGR 3A",colVol:"Vol 1A",colSharpe:"Sharpe",colBeta:"Beta",colDD:"Drawdown",colSignal:"Signal",
     indTitle:"Indicateurs",indPeriod:"période",indPivot:"Points Pivot",indRefresh:"↻ Actualiser",backDash:"← Tableau de bord",
-    stTitle:"Stratégie crossover MA multi-actifs",stPresets:"STRATÉGIES",stAsset:"ACTIF / TICKER",stPeriod:"PÉRIODE",stShortMa:"MA RAPIDE",stLongMa:"MA LENTE",stRisk:"RISQUE %",stRr:"R:R RATIO",stSpread:"SPREAD (pts/côté)",stSlippage:"SLIPPAGE (pts/côté)",stCommission:"COMMISSION (%/côté)",stRunBtn:"▶ LANCER BACKTEST",stOptBtn:"🔍 Meilleures configurations",stResults:"Résultats",stProfit:"Profit",stWinRate:"Taux de gain",stTrades:"Trades",stMaxDd:"DD Max",st3mo:"3 Mois",st6mo:"6 Mois",st1y:"1 An",st2y:"2 Ans",st5y:"5 Ans",st10y:"10 Ans",
+    stTitle:"Stratégies de Trading",stPresets:"STRATÉGIES",stAsset:"ACTIF / TICKER",stPeriod:"PÉRIODE",stShortMa:"MA RAPIDE",stLongMa:"MA LENTE",stRisk:"RISQUE %",stRr:"R:R RATIO",stSpread:"SPREAD (pts/côté)",stSlippage:"SLIPPAGE (pts/côté)",stCommission:"COMMISSION (%/côté)",stRunBtn:"▶ LANCER BACKTEST",stOptBtn:"🔍 Meilleures configurations",stResults:"Résultats",stProfit:"Profit",stWinRate:"Taux de gain",stTrades:"Trades",stMaxDd:"DD Max",st3mo:"3 Mois",st6mo:"6 Mois",st1y:"1 An",st2y:"2 Ans",st5y:"5 Ans",st10y:"10 Ans",
     stRoulette:"40 DERNIÈRES OPÉRATIONS — vert=gain / rouge=perte",stPlaceholder:"Configurez les paramètres et lancez le backtest",stOptResults:"Meilleures Configurations",stSortScore:"Score",stSortTrades:"Plus de trades",
     stUseRsi:"Filtre RSI",stUseTrend:"Filtre tendance (200MA)",
     stOptCol:{short:"MA Rapide",long:"MA Lente",ret:"Rendement %",wr:"Gain%",tr:"Trades",dd:"DD Max%",sharpe:"Sharpe",score:"Score"},
@@ -757,7 +782,7 @@ const T = {
   es:{subtitle:"Carga tu cartera · Análisis completo · Informe Excel",dropLabel:"Arrastra el archivo Excel aquí",dropHint:'o <span id="browse-link">explorar</span> — .xlsx / .xls',tagReady:"listo",analyzeBtn:"🚀 Iniciar Análisis",ph0:"Descarga",ph1:"Validación",ph2:"Métricas",ph3:"Optimización",ph4:"Export",kpiA:"Activos Analizados",kpiS:"Sharpe Promedio",kpiV:"Volatilidad",kpiD:"Drawdown",dlBtn:"📥 Descargar Informe",secMetrics:"Métricas Detalladas",newBtn:"🔄 Nuevo Análisis",errFmt:"Formato inválido",errUp:"Error upload",errConn:"Conexión perdida",gsTitle:"Buscar cualquier activo",gsSubtitle:"Búsqueda global: acciones, ETF, índices, materias primas",navSearch:"Búsqueda",navNews:"Noticias",navStrategy:"Estrategia",
     colName:"Nombre",colIsin:"ISIN",colCountry:"País",colPerf1:"Rend 1A",colPerf3:"Rend 3A",colPerf5:"Rend 5A",colCagr3:"CAGR 3A",colVol:"Vol 1A",colSharpe:"Sharpe",colBeta:"Beta",colDD:"Drawdown",colSignal:"Señal",
     indTitle:"Indicadores",indPeriod:"período",indPivot:"Puntos Pivote",indRefresh:"↻ Actualizar",backDash:"← Panel",
-    stTitle:"Estrategia crossover MA multiactivo",stPresets:"ESTRATEGIAS",stAsset:"ACTIVO / TICKER",stPeriod:"PERÍODO",stShortMa:"MA RÁPIDA",stLongMa:"MA LENTA",stRisk:"RIESGO %",stRr:"R:R RATIO",stSpread:"SPREAD (pts/lado)",stSlippage:"SLIPPAGE (pts/lado)",stCommission:"COMISIÓN (%/lado)",stRunBtn:"▶ EJECUTAR BACKTEST",stOptBtn:"🔍 Mejores configuraciones",stResults:"Resultados",stProfit:"Beneficio",stWinRate:"Tasa de acierto",stTrades:"Operaciones",stMaxDd:"DD Máx",st3mo:"3 Meses",st6mo:"6 Meses",st1y:"1 Año",st2y:"2 Años",st5y:"5 Años",st10y:"10 Años",
+    stTitle:"Estrategias de Trading",stPresets:"ESTRATEGIAS",stAsset:"ACTIVO / TICKER",stPeriod:"PERÍODO",stShortMa:"MA RÁPIDA",stLongMa:"MA LENTA",stRisk:"RIESGO %",stRr:"R:R RATIO",stSpread:"SPREAD (pts/lado)",stSlippage:"SLIPPAGE (pts/lado)",stCommission:"COMISIÓN (%/lado)",stRunBtn:"▶ EJECUTAR BACKTEST",stOptBtn:"🔍 Mejores configuraciones",stResults:"Resultados",stProfit:"Beneficio",stWinRate:"Tasa de acierto",stTrades:"Operaciones",stMaxDd:"DD Máx",st3mo:"3 Meses",st6mo:"6 Meses",st1y:"1 Año",st2y:"2 Años",st5y:"5 Años",st10y:"10 Años",
     stRoulette:"ÚLTIMAS 40 OPERACIONES — verde=ganancia / rojo=pérdida",stPlaceholder:"Configura los parámetros y ejecuta el backtest",stOptResults:"Mejores Configuraciones",stSortScore:"Score",stSortTrades:"Más operaciones",
     stUseRsi:"Filtro RSI",stUseTrend:"Filtro tendencia (200MA)",
     stOptCol:{short:"MA Rápida",long:"MA Lenta",ret:"Rendimiento %",wr:"Acierto%",tr:"Trades",dd:"DD Máx%",sharpe:"Sharpe",score:"Puntuación"},
@@ -767,7 +792,7 @@ const T = {
   ar:{subtitle:"حمّل محفظتك · تحليل كامل",dropLabel:"أسقط ملف Excel هنا",dropHint:'أو <span id="browse-link">تصفح</span>',tagReady:"جاهز",analyzeBtn:"🚀 بدء التحليل",ph0:"تحميل",ph1:"تحقق",ph2:"مقاييس",ph3:"تحسين",ph4:"تصدير",kpiA:"الأصول",kpiS:"شارب",kpiV:"التقلب",kpiD:"سحب",dlBtn:"📥 تحميل التقرير",secMetrics:"المقاييس التفصيلية",newBtn:"🔄 جديد",errFmt:"صيغة غير صالحة",errUp:"خطأ",errConn:"انقطع",gsTitle:"بحث عن أصل",gsSubtitle:"بحث عالمي",navSearch:"بحث",navNews:"أخبار",navStrategy:"استراتيجية",
     colName:"الاسم",colIsin:"ISIN",colCountry:"البلد",colPerf1:"عائد 1س",colPerf3:"عائد 3س",colPerf5:"عائد 5س",colCagr3:"CAGR 3س",colVol:"تقلب 1س",colSharpe:"شارب",colBeta:"بيتا",colDD:"سحب",colSignal:"إشارة",
     indTitle:"المؤشرات",indPeriod:"فترة",indPivot:"نقاط محورية",indRefresh:"↻ تحديث",backDash:"← لوحة القيادة",
-    stTitle:"استراتيجية MA Cross",stPresets:"الاستراتيجيات",stAsset:"الأصل",stPeriod:"الفترة",stShortMa:"MA سريع",stLongMa:"MA بطيء",stRisk:"مخاطرة %",stRr:"نسبة R:R",stSpread:"فارق",stRunBtn:"▶ تشغيل",stOptBtn:"🔍 أفضل الإعدادات",stResults:"النتائج",stProfit:"ربح",stWinRate:"نسبة الفوز",stTrades:"صفقات",stMaxDd:"أقصى سحب",st3mo:"3 أشهر",st6mo:"6 أشهر",st1y:"سنة",st2y:"سنتان",st5y:"5 سنوات",st10y:"10 سنوات",
+    stTitle:"استراتيجيات التداول",stPresets:"الاستراتيجيات",stAsset:"الأصل",stPeriod:"الفترة",stShortMa:"MA سريع",stLongMa:"MA بطيء",stRisk:"مخاطرة %",stRr:"نسبة R:R",stSpread:"فارق",stRunBtn:"▶ تشغيل",stOptBtn:"🔍 أفضل الإعدادات",stResults:"النتائج",stProfit:"ربح",stWinRate:"نسبة الفوز",stTrades:"صفقات",stMaxDd:"أقصى سحب",st3mo:"3 أشهر",st6mo:"6 أشهر",st1y:"سنة",st2y:"سنتان",st5y:"5 سنوات",st10y:"10 سنوات",
     stRoulette:"آخر 40 عملية",stPlaceholder:"اضبط المعلمات وابدأ الاختبار",stOptResults:"أفضل الإعدادات",stSortScore:"النتيجة",stSortTrades:"أكثر الصفقات",
     stUseRsi:"فلتر RSI",stUseTrend:"فلتر الاتجاه",
     stOptCol:{short:"MA سريع",long:"MA بطيء",ret:"عائد%",wr:"فوز%",tr:"صفقات",dd:"DD%",sharpe:"شارب",score:"نقاط"},
@@ -777,7 +802,7 @@ const T = {
   zh:{subtitle:"上传投资组合 · 完整分析 · Excel报告",dropLabel:"拖放Excel文件",dropHint:'或 <span id="browse-link">浏览</span>',tagReady:"就绪",analyzeBtn:"🚀 开始分析",ph0:"下载",ph1:"验证",ph2:"指标",ph3:"优化",ph4:"导出",kpiA:"分析资产",kpiS:"夏普比率",kpiV:"波动率",kpiD:"最大回撤",dlBtn:"📥 下载报告",secMetrics:"详细指标",newBtn:"🔄 新分析",errFmt:"无效格式",errUp:"上传错误",errConn:"连接断开",gsTitle:"搜索任何资产",gsSubtitle:"全球搜索：股票、ETF、指数、商品",navSearch:"搜索",navNews:"新闻",navStrategy:"策略",
     colName:"名称",colIsin:"ISIN",colCountry:"国家",colPerf1:"1年回报",colPerf3:"3年回报",colPerf5:"5年回报",colCagr3:"CAGR 3年",colVol:"1年波动",colSharpe:"夏普",colBeta:"贝塔",colDD:"最大回撤",colSignal:"信号",
     indTitle:"指标",indPeriod:"周期",indPivot:"枢轴点",indRefresh:"↻ 刷新",backDash:"← 仪表板",
-    stTitle:"MA交叉策略",stPresets:"策略",stAsset:"资产/代码",stPeriod:"周期",stShortMa:"快速MA",stLongMa:"慢速MA",stRisk:"风险%",stRr:"盈亏比",stSpread:"点差",stRunBtn:"▶ 运行回测",stOptBtn:"🔍 最佳参数组合",stResults:"结果",stProfit:"利润",stWinRate:"胜率",stTrades:"交易数",stMaxDd:"最大回撤",st3mo:"3个月",st6mo:"6个月",st1y:"1年",st2y:"2年",st5y:"5年",st10y:"10年",
+    stTitle:"交易策略",stPresets:"策略",stAsset:"资产/代码",stPeriod:"周期",stShortMa:"快速MA",stLongMa:"慢速MA",stRisk:"风险%",stRr:"盈亏比",stSpread:"点差",stRunBtn:"▶ 运行回测",stOptBtn:"🔍 最佳参数组合",stResults:"结果",stProfit:"利润",stWinRate:"胜率",stTrades:"交易数",stMaxDd:"最大回撤",st3mo:"3个月",st6mo:"6个月",st1y:"1年",st2y:"2年",st5y:"5年",st10y:"10年",
     stRoulette:"最近40笔交易（从右到左）— 绿=盈 / 红=亏",stPlaceholder:"配置参数并运行回测",stOptResults:"最佳配置",stSortScore:"评分",stSortTrades:"交易数最多",
     stUseRsi:"RSI过滤器",stUseTrend:"趋势过滤器(200MA)",
     stOptCol:{short:"快速MA",long:"慢速MA",ret:"回报%",wr:"胜率%",tr:"交易",dd:"最大DD%",sharpe:"夏普",score:"评分"},
@@ -787,7 +812,7 @@ const T = {
   ru:{subtitle:"Загрузите портфель · Полный анализ · Excel-отчёт",dropLabel:"Перетащите Excel-файл",dropHint:'или <span id="browse-link">выберите файл</span>',tagReady:"готово",analyzeBtn:"🚀 Начать Анализ",ph0:"Загрузка",ph1:"Проверка",ph2:"Метрики",ph3:"Оптимизация",ph4:"Экспорт",kpiA:"Активов",kpiS:"Шарп",kpiV:"Волатильность",kpiD:"Просадка",dlBtn:"📥 Скачать Отчёт",secMetrics:"Детальные Метрики",newBtn:"🔄 Новый Анализ",errFmt:"Неверный формат",errUp:"Ошибка загрузки",errConn:"Соединение потеряно",gsTitle:"Найти любой актив",gsSubtitle:"Глобальный поиск: акции, ETF, индексы, сырьё",navSearch:"Поиск",navNews:"Новости",navStrategy:"Стратегия",
     colName:"Название",colIsin:"ISIN",colCountry:"Страна",colPerf1:"Доход 1Г",colPerf3:"Доход 3Г",colPerf5:"Доход 5Г",colCagr3:"CAGR 3Г",colVol:"Вол 1Г",colSharpe:"Шарп",colBeta:"Бета",colDD:"Просадка",colSignal:"Сигнал",
     indTitle:"Индикаторы",indPeriod:"период",indPivot:"Пивоты",indRefresh:"↻ Обновить",backDash:"← Панель",
-    stTitle:"Стратегия MA Cross",stPresets:"СТРАТЕГИИ",stAsset:"АКТИВ / ТИКЕР",stPeriod:"ПЕРИОД",stShortMa:"МА БЫСТРАЯ",stLongMa:"МА МЕДЛЕННАЯ",stRisk:"РИСК %",stRr:"R:R RATIO",stSpread:"СПРЕД (pts)",stRunBtn:"▶ ЗАПУСТИТЬ БЭКТЕСТ",stOptBtn:"🔍 Лучшие конфигурации",stResults:"Результаты",stProfit:"Прибыль",stWinRate:"% побед",stTrades:"Сделки",stMaxDd:"Макс ПП",st3mo:"3 Месяца",st6mo:"6 Месяцев",st1y:"1 Год",st2y:"2 Года",st5y:"5 Лет",st10y:"10 Лет",
+    stTitle:"Торговые стратегии",stPresets:"СТРАТЕГИИ",stAsset:"АКТИВ / ТИКЕР",stPeriod:"ПЕРИОД",stShortMa:"МА БЫСТРАЯ",stLongMa:"МА МЕДЛЕННАЯ",stRisk:"РИСК %",stRr:"R:R RATIO",stSpread:"СПРЕД (pts)",stRunBtn:"▶ ЗАПУСТИТЬ БЭКТЕСТ",stOptBtn:"🔍 Лучшие конфигурации",stResults:"Результаты",stProfit:"Прибыль",stWinRate:"% побед",stTrades:"Сделки",stMaxDd:"Макс ПП",st3mo:"3 Месяца",st6mo:"6 Месяцев",st1y:"1 Год",st2y:"2 Года",st5y:"5 Лет",st10y:"10 Лет",
     stRoulette:"ПОСЛЕДНИЕ 40 СДЕЛОК — зелёный=прибыль / красный=убыток",stPlaceholder:"Настройте параметры и запустите бэктест",stOptResults:"Лучшие Конфигурации",stSortScore:"Score",stSortTrades:"Больше сделок",
     stUseRsi:"Фильтр RSI",stUseTrend:"Фильтр тренда (200MA)",
     stOptCol:{short:"Быстрая МА",long:"Медленная МА",ret:"Доход %",wr:"Победы%",tr:"Сделки",dd:"ПП Макс%",sharpe:"Шарп",score:"Оценка"},
@@ -1616,8 +1641,20 @@ document.addEventListener('click',e=>{
    accepts any yfinance ticker, it's not gold-specific.
 ════════════════════════════════════════════════════════════════ */
 const STRATEGY_PRESETS=[
-  {id:'gold',icon:'🥇',label:'Gold (Oro) · Futures',ticker:'GC=F',period:'2y',short_ma:8,long_ma:100,risk:2,rr:2,spread:0,slippage:0,commission:0,rsi:true,trend:true},
+  {id:'gold',icon:'🥇',label:'Gold (Oro) · Futures',strategy:'ma_cross',ticker:'GC=F',period:'2y',short_ma:8,long_ma:100,risk:2,rr:2,spread:0,slippage:0,commission:0,rsi:true,trend:true},
+  {id:'spy_rsi',icon:'📉',label:'SPY · RSI Mean-Reversion',strategy:'rsi',ticker:'SPY',period:'5y',rsi_period:14,rsi_oversold:30,rsi_overbought:70,risk:1,spread:0,slippage:0,commission:0},
 ];
+
+let curStrategyType='ma_cross';
+function setStrategyType(type){
+  curStrategyType=type==='rsi'?'rsi':'ma_cross';
+  document.getElementById('st-engine-ma')?.classList.toggle('on',curStrategyType==='ma_cross');
+  document.getElementById('st-engine-rsi')?.classList.toggle('on',curStrategyType==='rsi');
+  const maEl=document.getElementById('st-ma-fields'),rsiEl=document.getElementById('st-rsi-fields'),filtEl=document.getElementById('st-ma-filters');
+  if(maEl)maEl.style.display=curStrategyType==='ma_cross'?'block':'none';
+  if(rsiEl)rsiEl.style.display=curStrategyType==='rsi'?'block':'none';
+  if(filtEl)filtEl.style.display=curStrategyType==='ma_cross'?'grid':'none';
+}
 
 function renderStrategyPresets(){
   const box=document.getElementById('st-presets');
@@ -1654,17 +1691,24 @@ document.addEventListener('click',e=>{
 function applyStrategyPreset(id){
   const p=STRATEGY_PRESETS.find(x=>x.id===id);
   if(!p)return;
+  setStrategyType(p.strategy||'ma_cross');
   document.getElementById('st-ticker-inp').value=p.ticker;
   selectPeriod(p.period);
-  document.getElementById('st-short-ma').value=p.short_ma;
-  document.getElementById('st-long-ma').value=p.long_ma;
+  if(curStrategyType==='rsi'){
+    document.getElementById('st-rsi-period').value=p.rsi_period;
+    document.getElementById('st-rsi-oversold').value=p.rsi_oversold;
+    document.getElementById('st-rsi-overbought').value=p.rsi_overbought;
+  } else {
+    document.getElementById('st-short-ma').value=p.short_ma;
+    document.getElementById('st-long-ma').value=p.long_ma;
+    document.getElementById('st-rr').value=p.rr;
+    document.getElementById('st-use-rsi').checked=p.rsi;
+    document.getElementById('st-use-trend').checked=p.trend;
+  }
   document.getElementById('st-risk').value=p.risk;
-  document.getElementById('st-rr').value=p.rr;
   document.getElementById('st-spread').value=p.spread;
   document.getElementById('st-slippage').value=p.slippage;
   document.getElementById('st-commission').value=p.commission;
-  document.getElementById('st-use-rsi').checked=p.rsi;
-  document.getElementById('st-use-trend').checked=p.trend;
   document.querySelectorAll('.st-preset-item').forEach(el=>el.classList.toggle('active',el.dataset.id===id));
 }
 
@@ -1677,16 +1721,23 @@ async function runStrategy(){
     const payload={
       ticker,
       period:document.getElementById('st-period').value,
-      short_ma:+document.getElementById('st-short-ma').value||10,
-      long_ma:+document.getElementById('st-long-ma').value||50,
+      strategy:curStrategyType,
       risk_per_trade:(+document.getElementById('st-risk').value||2)/100,
-      reward_ratio:+document.getElementById('st-rr').value||2,
       spread:+document.getElementById('st-spread').value||0,
       slippage:+document.getElementById('st-slippage').value||0,
       commission_rate:(+document.getElementById('st-commission').value||0)/100,
-      use_rsi_filter:document.getElementById('st-use-rsi')?.checked!==false,
-      use_trend_filter:document.getElementById('st-use-trend')?.checked!==false,
     };
+    if(curStrategyType==='rsi'){
+      payload.rsi_period=+document.getElementById('st-rsi-period').value||14;
+      payload.rsi_oversold=+document.getElementById('st-rsi-oversold').value||30;
+      payload.rsi_overbought=+document.getElementById('st-rsi-overbought').value||70;
+    } else {
+      payload.short_ma=+document.getElementById('st-short-ma').value||10;
+      payload.long_ma=+document.getElementById('st-long-ma').value||50;
+      payload.reward_ratio=+document.getElementById('st-rr').value||2;
+      payload.use_rsi_filter=document.getElementById('st-use-rsi')?.checked!==false;
+      payload.use_trend_filter=document.getElementById('st-use-trend')?.checked!==false;
+    }
     const res=await fetch('/api/strategy/backtest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     if(!res.ok){const e=await res.json();throw new Error(e.detail||`HTTP ${res.status}`);}
     const data=await res.json();
@@ -1765,6 +1816,17 @@ function _renderEquityCurve(eqData){
   new ResizeObserver(()=>{if(_lwEqChart)_lwEqChart.applyOptions({width:el.clientWidth,height:el.clientHeight});}).observe(el);
 }
 
+function _optColspan(){return curStrategyType==='rsi'?9:8;}
+
+function _setOptTableHeader(){
+  const row=document.getElementById('st-opt-thead-row');
+  if(!row)return;
+  const cols=curStrategyType==='rsi'
+    ?[['#',''],['RSI','short'],['OS','long'],['OB','ratio'],['Return','ret'],['Win%','wr'],['Trades','tr'],['Max DD','dd'],['Score','score']]
+    :[['#',''],['MA Fast','short'],['MA Slow','long'],['Return','ret'],['Win%','wr'],['Trades','tr'],['Max DD','dd'],['Score','score']];
+  row.innerHTML=cols.map(([label,key])=>`<th style="color:var(--cyan);padding:5px 8px"${key?` data-i18n-col="${key}"`:''}>${label}</th>`).join('');
+}
+
 async function runOptimize(){
   const ticker=(document.getElementById('st-ticker-inp').value||'').trim().toUpperCase();
   if(!ticker){alert('Insert a ticker first');return;}
@@ -1773,28 +1835,32 @@ async function runOptimize(){
   btn.textContent='⟳ Searching…';btn.disabled=true;
   const res_area=document.getElementById('st-opt-results');
   if(res_area)res_area.style.display='block';
+  _setOptTableHeader();
   const tbody=document.getElementById('st-opt-tbody');
-  if(tbody)tbody.innerHTML=`<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px">Running grid search…</td></tr>`;
+  if(tbody)tbody.innerHTML=`<tr><td colspan="${_optColspan()}" style="text-align:center;color:var(--muted);padding:20px">Running grid search…</td></tr>`;
   try{
     const payload={
       ticker,
       period:document.getElementById('st-period').value,
+      strategy:curStrategyType,
       risk_per_trade:(+document.getElementById('st-risk').value||2)/100,
-      reward_ratio:+document.getElementById('st-rr').value||2,
       spread:+document.getElementById('st-spread').value||0,
       slippage:+document.getElementById('st-slippage').value||0,
       commission_rate:(+document.getElementById('st-commission').value||0)/100,
-      use_rsi_filter:document.getElementById('st-use-rsi')?.checked!==false,
-      use_trend_filter:document.getElementById('st-use-trend')?.checked!==false,
       top_n:150,
     };
+    if(curStrategyType!=='rsi'){
+      payload.reward_ratio=+document.getElementById('st-rr').value||2;
+      payload.use_rsi_filter=document.getElementById('st-use-rsi')?.checked!==false;
+      payload.use_trend_filter=document.getElementById('st-use-trend')?.checked!==false;
+    }
     const res=await fetch('/api/strategy/optimize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     if(!res.ok){const e=await res.json();throw new Error(e.detail||`HTTP ${res.status}`);}
     const data=await res.json();
     _lastOptResults=data.results||[];
     sortOptResults('score');
   }catch(err){
-    if(tbody)tbody.innerHTML=`<tr><td colspan="8" style="color:var(--red);text-align:center;padding:12px">Error: ${err.message}</td></tr>`;
+    if(tbody)tbody.innerHTML=`<tr><td colspan="${_optColspan()}" style="color:var(--red);text-align:center;padding:12px">Error: ${err.message}</td></tr>`;
   }finally{
     btn.textContent=T[LANG].stOptBtn||'🔍 Best configs';btn.disabled=false;
   }
@@ -1811,19 +1877,27 @@ function sortOptResults(key){
 function _renderOptResults(results){
   const tbody=document.getElementById('st-opt-tbody');
   if(!tbody)return;
-  if(!results.length){tbody.innerHTML='<tr><td colspan="8" style="color:var(--muted);text-align:center;padding:12px">No results</td></tr>';return;}
-  tbody.innerHTML=results.map((r,i)=>`
-    <tr style="cursor:pointer;${i===0?'background:rgba(0,212,255,0.06);border-left:2px solid var(--cyan)':''}"
-        onclick="document.getElementById('st-short-ma').value=${r.short_ma};document.getElementById('st-long-ma').value=${r.long_ma};runStrategy()">
+  if(!results.length){tbody.innerHTML=`<tr><td colspan="${_optColspan()}" style="color:var(--muted);text-align:center;padding:12px">No results</td></tr>`;return;}
+  const isRsi=curStrategyType==='rsi';
+  tbody.innerHTML=results.map((r,i)=>{
+    const hl=i===0?'background:rgba(0,212,255,0.06);border-left:2px solid var(--cyan)':'';
+    const applyParams=isRsi
+      ?`document.getElementById('st-rsi-period').value=${r.rsi_period};document.getElementById('st-rsi-oversold').value=${r.oversold};document.getElementById('st-rsi-overbought').value=${r.overbought};runStrategy()`
+      :`document.getElementById('st-short-ma').value=${r.short_ma};document.getElementById('st-long-ma').value=${r.long_ma};runStrategy()`;
+    const paramCells=isRsi
+      ?`<td>${r.rsi_period}</td><td>${r.oversold}</td><td>${r.overbought}</td>`
+      :`<td>${r.short_ma}</td><td>${r.long_ma}</td>`;
+    return `
+    <tr style="cursor:pointer;${hl}" onclick="${applyParams}">
       <td style="font-weight:700;color:var(--cyan)">#${i+1}</td>
-      <td>${r.short_ma}</td>
-      <td>${r.long_ma}</td>
+      ${paramCells}
       <td class="${r.total_return>=0?'val-pos':'val-neg'}">${r.total_return>=0?'+':''}${r.total_return}%</td>
       <td class="${r.win_rate>=50?'val-pos':'val-neg'}">${r.win_rate}%</td>
       <td>${r.num_trades}</td>
       <td class="val-neg">${r.max_drawdown}%</td>
       <td style="color:var(--yellow);font-weight:600">${r.score}</td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 }
 
 /* ════════════════════════════════════════════════════════════════

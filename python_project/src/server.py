@@ -696,8 +696,12 @@ async def news_endpoint(ticker: str):
 class StrategyRequest(BaseModel):
     ticker: str
     period: str = "1y"
+    strategy: str = "ma_cross"     # "ma_cross" | "rsi"
     short_ma: int = 10
     long_ma: int = 50
+    rsi_period: int = 14
+    rsi_oversold: int = 30
+    rsi_overbought: int = 70
     risk_per_trade: float = 0.02
     reward_ratio: float = 2.0
     spread: float = Field(default=0.0, ge=0.0)
@@ -759,6 +763,73 @@ def _prepare_backtest_frame(hist: pd.DataFrame, req: StrategyRequest) -> pd.Data
     display_days = _PERIOD_CALENDAR_DAYS.get(req.period, 365)
     cutoff = df.index.max() - pd.Timedelta(days=display_days)
     return df[df.index >= cutoff]
+
+
+def _prepare_rsi_backtest_frame(hist: pd.DataFrame, req: StrategyRequest) -> pd.DataFrame:
+    """RSI mean-reversion: go long while RSI is below the oversold level, flat once it
+    crosses back above the overbought level (ported from strategy_projects/spy_rsi_project)."""
+    need = req.rsi_period + 20
+    if hist.empty or len(hist) < need:
+        raise ValueError(
+            f"Insufficient data for backtest (need ≥{need} bars, got {len(hist)})"
+        )
+
+    df = hist[["Close", "High", "Low"]].copy()
+    df["rsi"] = _compute_rsi(df["Close"], req.rsi_period)
+
+    signal = pd.Series(float("nan"), index=df.index)
+    signal[df["rsi"] < req.rsi_oversold] = 1
+    signal[df["rsi"] > req.rsi_overbought] = 0
+    df["signal"] = signal.ffill().fillna(0)
+
+    display_days = _PERIOD_CALENDAR_DAYS.get(req.period, 365)
+    cutoff = df.index.max() - pd.Timedelta(days=display_days)
+    return df[df.index >= cutoff]
+
+
+def _simulate_rsi_trades(df: pd.DataFrame, req: StrategyRequest) -> tuple[float, list[float], list[dict], list[dict]]:
+    """Walk the RSI signal column applying entry/exit rules; mirrors _simulate_trades'
+    output shape so the same rendering/response code works for both strategies."""
+    capital = 10_000.0
+    equity: list[float] = [capital]
+    trades: list[dict] = []
+    signals: list[dict] = []
+    in_trade = False
+    entry_price = 0.0
+
+    for i in range(1, len(df)):
+        prev_sig = df["signal"].iloc[i - 1]
+        curr_sig = df["signal"].iloc[i]
+        price    = float(df["Close"].iloc[i])
+        date_str = str(df.index[i].date())
+
+        if not in_trade and curr_sig == 1 and prev_sig == 0:
+            in_trade = True
+            entry_price = price + req.spread + req.slippage
+            signals.append({"date": date_str, "type": "buy", "price": round(entry_price, 4)})
+
+        elif in_trade and curr_sig == 0 and prev_sig == 1:
+            exit_price = max(price - req.spread - req.slippage, 0.0)
+            pnl_pct = (exit_price - entry_price) / entry_price if entry_price > 0 else 0
+            position_value = capital * req.risk_per_trade
+            commission = position_value * req.commission_rate * 2
+            trade_pnl = position_value * pnl_pct - commission
+            capital += trade_pnl
+            is_win = trade_pnl > 0
+            trades.append({
+                "date":   date_str,
+                "pnl":    round(trade_pnl, 2),
+                "is_win": is_win,
+                "entry":  round(entry_price, 4),
+                "exit":   round(exit_price, 4),
+                "costs":  round(commission, 2),
+            })
+            signals.append({"date": date_str, "type": "sell", "price": round(exit_price, 4)})
+            in_trade = False
+
+        equity.append(capital)
+
+    return capital, equity, trades, signals
 
 
 def _simulate_trades(df: pd.DataFrame, req: StrategyRequest) -> tuple[float, list[float], list[dict], list[dict]]:
@@ -851,8 +922,12 @@ def _run_backtest_on_history(hist: pd.DataFrame, req: StrategyRequest) -> dict:
     - Trend filter: only BUY when price > slow_ma (uptrend confirmed).
     - Signals list: buy/sell markers with date + price for chart overlay.
     """
-    df = _prepare_backtest_frame(hist, req)
-    capital, equity, trades, signals = _simulate_trades(df, req)
+    if req.strategy == "rsi":
+        df = _prepare_rsi_backtest_frame(hist, req)
+        capital, equity, trades, signals = _simulate_rsi_trades(df, req)
+    else:
+        df = _prepare_backtest_frame(hist, req)
+        capital, equity, trades, signals = _simulate_trades(df, req)
 
     equity_curve = [
         {"time": str(df.index[i].date()), "value": round(eq, 2)}
@@ -919,6 +994,7 @@ async def strategy_backtest(req: StrategyRequest):
 class OptimizeRequest(BaseModel):
     ticker: str
     period: str = "1y"
+    strategy: str = "ma_cross"     # "ma_cross" | "rsi"
     risk_per_trade: float = 0.02
     reward_ratio: float = 2.0
     spread: float = Field(default=0.0, ge=0.0)
@@ -932,51 +1008,92 @@ class OptimizeRequest(BaseModel):
 @app.post("/api/strategy/optimize")
 async def strategy_optimize(req: OptimizeRequest):
     """
-    Grid search over MA parameter combinations.
+    Grid search over strategy parameter combinations (MA crossover or RSI mean-reversion).
     Returns top_n configurations ranked by a composite score.
     """
     SHORT_MAS = [3, 5, 8, 10, 13, 15, 20, 21, 25, 30, 34]
     LONG_MAS  = [20, 30, 34, 40, 50, 60, 70, 89, 100, 120, 144, 150, 200]
+    RSI_PERIODS      = [5, 10, 15, 20]
+    OVERSOLD_LEVELS  = [20, 25, 30, 35, 40]
+    OVERBOUGHT_LEVELS = [55, 60, 65, 70, 75]
 
     def _optimize(req: OptimizeRequest):
         hist = _fetch_price_history(req.ticker, req.period)
         results = []
-        for sm in SHORT_MAS:
-            for lm in LONG_MAS:
-                if lm <= sm:
-                    continue
-                try:
-                    bt = _run_backtest_on_history(hist, StrategyRequest(
-                        ticker=req.ticker,
-                        period=req.period,
-                        short_ma=sm,
-                        long_ma=lm,
-                        risk_per_trade=req.risk_per_trade,
-                        reward_ratio=req.reward_ratio,
-                        spread=req.spread,
-                        slippage=req.slippage,
-                        commission_rate=req.commission_rate,
-                        use_rsi_filter=req.use_rsi_filter,
-                        use_trend_filter=req.use_trend_filter,
-                    ))
-                    if bt["num_trades"] < 2:
+
+        if req.strategy == "rsi":
+            for rp in RSI_PERIODS:
+                for os_ in OVERSOLD_LEVELS:
+                    for ob in OVERBOUGHT_LEVELS:
+                        try:
+                            bt = _run_backtest_on_history(hist, StrategyRequest(
+                                ticker=req.ticker,
+                                period=req.period,
+                                strategy="rsi",
+                                rsi_period=rp,
+                                rsi_oversold=os_,
+                                rsi_overbought=ob,
+                                risk_per_trade=req.risk_per_trade,
+                                spread=req.spread,
+                                slippage=req.slippage,
+                                commission_rate=req.commission_rate,
+                            ))
+                            if bt["num_trades"] < 2:
+                                continue
+                            dd = abs(bt["max_drawdown"]) or 0.01
+                            score = (bt["total_return_pct"] * bt["win_rate"]) / dd
+                            results.append({
+                                "rsi_period":   rp,
+                                "oversold":     os_,
+                                "overbought":   ob,
+                                "total_profit": bt["total_profit"],
+                                "total_return": round(bt["total_return_pct"], 2),
+                                "win_rate":     round(bt["win_rate"] * 100, 1),
+                                "num_trades":   bt["num_trades"],
+                                "max_drawdown": round(bt["max_drawdown"] * 100, 2),
+                                "sharpe":       bt["strategy_sharpe"],
+                                "score":        round(score, 3),
+                            })
+                        except Exception:
+                            continue
+        else:
+            for sm in SHORT_MAS:
+                for lm in LONG_MAS:
+                    if lm <= sm:
                         continue
-                    # Composite score: balances return, win-rate, and drawdown
-                    dd = abs(bt["max_drawdown"]) or 0.01
-                    score = (bt["total_return_pct"] * bt["win_rate"]) / dd
-                    results.append({
-                        "short_ma":     sm,
-                        "long_ma":      lm,
-                        "total_profit": bt["total_profit"],
-                        "total_return": round(bt["total_return_pct"], 2),
-                        "win_rate":     round(bt["win_rate"] * 100, 1),
-                        "num_trades":   bt["num_trades"],
-                        "max_drawdown": round(bt["max_drawdown"] * 100, 2),
-                        "sharpe":       bt["strategy_sharpe"],
-                        "score":        round(score, 3),
-                    })
-                except Exception:
-                    continue
+                    try:
+                        bt = _run_backtest_on_history(hist, StrategyRequest(
+                            ticker=req.ticker,
+                            period=req.period,
+                            strategy="ma_cross",
+                            short_ma=sm,
+                            long_ma=lm,
+                            risk_per_trade=req.risk_per_trade,
+                            reward_ratio=req.reward_ratio,
+                            spread=req.spread,
+                            slippage=req.slippage,
+                            commission_rate=req.commission_rate,
+                            use_rsi_filter=req.use_rsi_filter,
+                            use_trend_filter=req.use_trend_filter,
+                        ))
+                        if bt["num_trades"] < 2:
+                            continue
+                        # Composite score: balances return, win-rate, and drawdown
+                        dd = abs(bt["max_drawdown"]) or 0.01
+                        score = (bt["total_return_pct"] * bt["win_rate"]) / dd
+                        results.append({
+                            "short_ma":     sm,
+                            "long_ma":      lm,
+                            "total_profit": bt["total_profit"],
+                            "total_return": round(bt["total_return_pct"], 2),
+                            "win_rate":     round(bt["win_rate"] * 100, 1),
+                            "num_trades":   bt["num_trades"],
+                            "max_drawdown": round(bt["max_drawdown"] * 100, 2),
+                            "sharpe":       bt["strategy_sharpe"],
+                            "score":        round(score, 3),
+                        })
+                    except Exception:
+                        continue
 
         results.sort(key=lambda x: x["score"], reverse=True)
         return results[: req.top_n]
