@@ -1,93 +1,89 @@
-# 📘 README.md
+# 📊 ETF Portfolio Analyzer
+
+A Python toolkit for analyzing and backtesting a multi-asset ETF/stock portfolio, with two ways to use it:
+
+* a **web app** (FastAPI + interactive charts) for exploring tickers, running strategy backtests and reading news sentiment
+* a **CLI pipeline** that turns a spreadsheet of ISINs/tickers into a full Excel analytics report
 
 ---
 
-# 📊 Portfolio Analytics & Optimization Engine
-
-Advanced multi-asset portfolio analytics framework built in Python.
-
-This project performs:
-
-* ISIN → Ticker mapping
-* Market data download (Yahoo Finance)
-* Performance analytics
-* Risk analytics
-* Portfolio optimization
-* Multi-horizon stability (seasonality) analysis
-* Professional Excel reporting
-
----
-
-# 🧱 Project Structure
+## 🧱 Project Structure
 
 ```
 python_project/
-│
-├── data/
-│   ├── himalaya.xlsx
-│   ├── isin_ticker_mapping.csv
-│
-├── output/
-│   └── portfolio_analysis.xlsx
-│
 ├── src/
-│   ├── main.py
-│   ├── analytics.py
-│   ├── risk_metrics.py
-│   ├── optimization.py
-│   ├── seasonality.py
-│   ├── excel_export.py
-│   ├── auto_mapping.py
-│   └── converter.py
-│
-├── env/
-└── requirements.txt
+│   ├── server.py            # FastAPI app (web UI + API)
+│   ├── chart_backend.py     # OHLCV chart data (cache-first, yfinance/stooq fallback)
+│   ├── data_cache.py        # SQLite OHLCV cache
+│   ├── main.py               # CLI pipeline entry point
+│   ├── analytics.py          # Performance metrics
+│   ├── risk_metrics.py       # Risk metrics
+│   ├── optimization.py       # Monte Carlo portfolio optimization
+│   ├── seasonality.py        # Multi-horizon stability analysis
+│   ├── excel_export.py       # Excel report generation
+│   ├── country.py            # Ticker → country detection
+│   ├── auto_mapping.py       # ISIN → ticker mapping helper
+│   └── static/                # Web frontend (SPA + chart indicators)
+├── strategy_projects/         # Standalone strategy research scripts
+│   ├── multi_asset_moving_average_cross/
+│   └── spy_rsi_project/
+├── data/                      # Input spreadsheet, ISIN/ticker mapping, OHLCV cache
+├── output/                     # Generated Excel reports
+├── Dockerfile / docker-compose.yml
+└── pyproject.toml / uv.lock
 ```
 
 ---
 
-# ⚙️ Setup
+## ⚙️ Setup
 
-## 1️⃣ Create virtual environment
-
-```bash
-python -m venv env
-source env/bin/activate
-```
-
-## 2️⃣ Install dependencies
+Dependencies are managed with [uv](https://docs.astral.sh/uv/):
 
 ```bash
-pip install -r requirements.txt
+make install
 ```
 
-Main libraries used:
-
-* pandas
-* numpy
-* yfinance
-* openpyxl
-* scipy
+This creates `venv/` and installs everything from `pyproject.toml` / `uv.lock` (also for the two strategy sub-projects).
 
 ---
 
-# 🚀 How to Run
+## 🚀 Running
 
-From project root:
+### Web app
 
 ```bash
-python src/main.py
+make run
+# or: venv/bin/python start_web.py
 ```
 
-Output will be generated in:
+Opens on `http://localhost:8000` (falls back to 8001/8002 if busy). Or with Docker:
 
+```bash
+docker compose up --build
 ```
-output/portfolio_analysis.xlsx
+
+**What's in it:**
+
+* **Search** — global ticker/ISIN search, or upload a portfolio spreadsheet for a full metrics table
+* **Chart** — candlestick chart (any yfinance ticker, intervals from 1m to 3mo) with SMA, EMA, RSI, Nadaraya-Watson envelope, pivot points and volume profile
+* **Strategy** — backtest and optimize two engines against any ticker:
+  * *MA Crossover* with optional RSI/trend filters
+  * *RSI Mean-Reversion* (long while RSI < oversold, flat once RSI > overbought)
+
+  Both support a parameter grid search ("Trova configurazioni migliori") ranked by a trade-count-aware composite score.
+* **News** — recent headlines per ticker with a simple keyword-based sentiment score and buy/sell/hold signal
+
+### CLI pipeline (Excel report)
+
+```bash
+make main
 ```
+
+Reads `data/himalaya.xlsx` (or the configured input file), resolves ISINs to tickers via `data/isin_ticker_mapping.csv`, downloads prices, computes metrics, and writes a full Excel report to `output/`.
 
 ---
 
-# 🔄 Data Flow Pipeline
+## 🔄 CLI Pipeline Flow
 
 ```
 Excel (ISIN)
@@ -104,84 +100,31 @@ Portfolio optimization
     ↓
 Multi-horizon stability analysis
     ↓
-Professional Excel report
+Excel report
 ```
 
 ---
 
-# 📈 Analytics Engine
+## 📈 Analytics
 
-## 📊 Performance Metrics (analytics.py)
+### Performance (`analytics.py`)
 
-Computed using daily adjusted prices.
+Current Price · Perf 1Y/3Y/5Y · CAGR 3Y/5Y · Avg Daily Return · Annual Return · Skewness · Kurtosis · Correlation & Covariance vs Benchmark
 
-### Metrics:
+### Risk (`risk_metrics.py`)
 
-* Current Price
-* Performance 1Y / 3Y / 5Y
-* CAGR 3Y / 5Y
-* Average Daily Return
-* Annual Return
-* Skewness
-* Kurtosis
-* Correlation vs Benchmark
-* Covariance vs Benchmark
+* Volatility (annualized): `σ_annual = std(daily_returns) * √252`
+* Sharpe Ratio: `(Annual Return − Risk Free Rate) / Annual Volatility`
+* Beta: `Cov(asset, benchmark) / Var(benchmark)`
+* Max Drawdown: `(Cumulative − RollingMax) / RollingMax`
 
----
+### Portfolio Optimization (`optimization.py`)
 
-## 📉 Risk Metrics (risk_metrics.py)
+Monte Carlo simulation over random portfolio weights → Max Sharpe portfolio, Min Volatility portfolio, correlation matrix.
 
-* Volatility (annualized)
-* Sharpe Ratio
-* Beta vs Benchmark
-* Max Drawdown
+### Multi-Horizon Stability (`seasonality.py`)
 
-Sharpe ratio uses:
-
-```
-Sharpe = (Annual Return - Risk Free Rate) / Annual Volatility
-```
-
----
-
-# 🧠 Portfolio Optimization (optimization.py)
-
-Monte Carlo simulation (random portfolios).
-
-### Outputs:
-
-* Max Sharpe Portfolio
-* Minimum Volatility Portfolio
-* Correlation Matrix
-
-Volatility computed via:
-
-```
-σ = sqrt(wᵀ Σ w)
-```
-
----
-
-# 🔁 Multi-Horizon Stability (seasonality.py)
-
-This module computes performance consistency across time horizons:
-
-* 3 Months
-* 6 Months
-* 1 Year
-* 2 Years
-* 3 Years
-* 4 Years
-* 5 Years
-
-Method:
-
-1. Rolling cumulative returns
-2. Pivot by year
-3. Correlation between years
-4. Average upper-triangle correlation
-
-Interpretation:
+Rolling cumulative returns pivoted by year, correlated across years, averaged over the upper triangle:
 
 | Value   | Meaning          |
 | ------- | ---------------- |
@@ -192,190 +135,28 @@ Interpretation:
 
 ---
 
-# 📊 Excel Report Structure
+## 📊 Excel Report
 
-The output file contains:
-
-## 🏠 Dashboard
-
-* Number of assets
-* Average Sharpe
-* Average Volatility
-* Average CAGR 3Y
-* Average Max Drawdown
+Dashboard (asset count, avg Sharpe/volatility/CAGR/drawdown) · Metrics table · Correlation heatmap · Max Sharpe & Min Volatility portfolio weights · Seasonality heatmap.
 
 ---
 
-## 📋 Metrics
+## 🌍 Country Detection
 
-Includes:
+Ticker suffix → country: `.L` UK · `.PA` France · `.DE`/`.F`/`.MU` Germany · `.MI` Italy · `.SW` Switzerland · `.AS` Netherlands · `.SI` Singapore.
 
-* Name
-* Country
-* Performance metrics
-* Risk metrics
-* Statistical metrics
-
-Features:
-
-* Automatic formatting
-* Country color coding
-* Dynamic legend
+Default benchmark: **IWDA.AS**.
 
 ---
 
-## 🔗 Correlation
+## ⚠️ Known Constraints
 
-* Full correlation matrix
-* Heatmap coloring (-1 to +1)
-
----
-
-## 🏆 Max Sharpe Portfolio
-
-Portfolio weights (formatted as percentages)
+* Yahoo Finance limits intraday history: 1m ≈ 7 days, 5m/15m/30m ≈ 60 days, 1h/4h ≈ 2 years
+* Horizons beyond available data length return NaN
+* Optimization may slow down with >100 assets
 
 ---
 
-## 🛡 Min Vol Portfolio
+## 👨‍💻 Author
 
-Portfolio weights (formatted as percentages)
-
----
-
-## 🔄 Seasonality (Multi-Horizon Stability)
-
-Columns:
-
-* 3M
-* 6M
-* 1Y
-* 2Y
-* 3Y
-* 4Y
-* 5Y
-* Rank (3Y)
-
-Heatmap applied automatically.
-
----
-
-# 🌍 Country Detection Logic
-
-Ticker suffix mapping:
-
-| Suffix         | Country     |
-| -------------- | ----------- |
-| .L             | UK          |
-| .PA            | France      |
-| .DE / .F / .MU | Germany     |
-| .MI            | Italy       |
-| .SW            | Switzerland |
-| .AS            | Netherlands |
-| .SI            | Singapore   |
-
----
-
-# 📌 Benchmark
-
-Default benchmark:
-
-```
-IWDA.AS
-```
-
-Used for:
-
-* Beta
-* Correlation
-* Covariance
-
----
-
-# 🧮 Mathematical Summary
-
-### Annual Return
-
-```
-μ_annual = mean(daily_returns) * 252
-```
-
-### Volatility
-
-```
-σ_annual = std(daily_returns) * √252
-```
-
-### Beta
-
-```
-β = Cov(asset, benchmark) / Var(benchmark)
-```
-
-### Max Drawdown
-
-```
-DD = (Cumulative - RollingMax) / RollingMax
-```
-
----
-
-# 🔧 Customization
-
-You can:
-
-* Change benchmark in `main.py`
-* Add new exchanges in `detect_country()`
-* Adjust risk-free rate in `analytics.py`
-* Modify optimization simulation size
-* Extend stability horizons
-
----
-
-# ⚠️ Known Constraints
-
-* Yahoo Finance data availability limits historical depth
-* Horizons above available data length return NaN
-* Optimization may be slower with >100 assets
-
----
-
-# 🧠 Future Improvements
-
-Possible upgrades:
-
-* Efficient Frontier visualization
-* Rolling Sharpe stability
-* Factor exposure analysis
-* Risk parity optimization
-* Transaction cost modelling
-* Streamlit dashboard
-* API integration
-
----
-
-# 🏗 Design Philosophy
-
-The project follows clean separation of concerns:
-
-| File            | Responsibility           |
-| --------------- | ------------------------ |
-| analytics.py    | Performance calculations |
-| risk_metrics.py | Risk calculations        |
-| optimization.py | Portfolio construction   |
-| seasonality.py  | Stability analysis       |
-| excel_export.py | Presentation layer       |
-| main.py         | Pipeline orchestration   |
-
----
-
-# 📄 License
-
-For educational and research purposes.
-
----
-
-# 👨‍💻 Author
 Emanuele Ielmini
-Portfolio Analytics Engine
-Built with Python for systematic investment research.
