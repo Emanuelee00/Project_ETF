@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Interactive Chart</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --panel-2: #1f2937;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --green: #22c55e;
+      --orange: #f59e0b;
+      --red: #ef4444;
+      --grid: rgba(148, 163, 184, 0.15);
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: "Segoe UI", sans-serif;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .wrap {
+      padding: 16px;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .field {
+      background: var(--panel);
+      border: 1px solid var(--panel-2);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .field select,
+    .field input {
+      width: 100%;
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 10px;
+    }
+
+    .status {
+      min-height: 22px;
+      margin-bottom: 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--panel-2);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+
+    .panel h3 {
+      margin: 0 0 10px 0;
+      font-size: 14px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    canvas {
+      width: 100% !important;
+    }
+
+    @media (max-width: 900px) {
+      .toolbar {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .toolbar {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="toolbar">
+      <div class="field">
+        <label for="period-select">Period</label>
+        <select id="period-select">
+          <option value="1mo">1 Month</option>
+          <option value="3mo">3 Months</option>
+          <option value="6mo">6 Months</option>
+          <option value="1y" selected>1 Year</option>
+          <option value="2y">2 Years</option>
+          <option value="5y">5 Years</option>
+          <option value="10y">10 Years</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="sma-input">SMA</label>
+        <input id="sma-input" type="number" min="2" max="200" value="20">
+      </div>
+      <div class="field">
+        <label for="ema-input">EMA</label>
+        <input id="ema-input" type="number" min="2" max="200" value="50">
+      </div>
+      <div class="field">
+        <label>Selected Ticker</label>
+        <input id="ticker-display" type="text" readonly>
+      </div>
+    </div>
+
+    <div id="status" class="status">Loading chart...</div>
+
+    <div class="panel">
+      <h3>Price, SMA, EMA</h3>
+      <canvas id="price-chart" height="140"></canvas>
+    </div>
+
+    <div class="panel">
+      <h3>Volume</h3>
+      <canvas id="volume-chart" height="100"></canvas>
+    </div>
+  </div>
+
+  <script>
+    window.CHART_CONFIG = __CHART_CONFIG__;
+  </script>
+  <script>
+__CHART_JS__
+  </script>
+</body>
+</html>

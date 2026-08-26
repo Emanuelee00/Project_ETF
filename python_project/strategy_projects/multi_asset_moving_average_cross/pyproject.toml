@@ -1,0 +1,11 @@
+[project]
+name = "multi-asset-moving-average-cross"
+version = "0.1.0"
+description = "Multi-asset moving-average crossover backtest and optimization"
+requires-python = ">=3.12"
+dependencies = [
+    "pandas>=3.0",
+    "yfinance>=1.2",
+    "matplotlib>=3.10",
+    "tqdm>=4.67",
+]

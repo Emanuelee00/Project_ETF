@@ -1,7 +1,5 @@
 import pandas as pd
 import numpy as np
-import pandas as pd
-import numpy as np
 
 
 def compute_weekly_seasonality_full(returns: pd.DataFrame):

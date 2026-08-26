@@ -1,11 +1,11 @@
 """Excel export utilities (stable professional version)."""
 
+import pandas as pd
 from openpyxl import Workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import PatternFill, Font
 from openpyxl.formatting.rule import ColorScaleRule
-from openpyxl.chart import ScatterChart, Reference, Series
 
 
 country_colors = {
@@ -140,9 +140,6 @@ def add_legend(ws):
 
 def add_seasonality_sheet(wb, weekly_seasonality):
 
-    from openpyxl.styles import Font, PatternFill
-    from openpyxl.utils import get_column_letter
-
     ws = wb.create_sheet("Weekly Seasonality")
 
     if weekly_seasonality is None or len(weekly_seasonality) == 0:
@@ -237,92 +234,58 @@ def add_seasonality_sheet(wb, weekly_seasonality):
 # Main Export Function
 # --------------------------------------------------
 
-def export_to_excel(
-    metrics,
-    correlation,
-    max_sharpe,
-    min_vol,
-    weekly_seasonality,
-    output_path
-):
-    """Export portfolio results to formatted Excel report with Dashboard."""
+def _sanitize_df_for_excel(df):
+    if df is None:
+        return df
+    return df.where(pd.notna(df), None)
 
-    wb = Workbook()
 
-    # =====================================================
-    # ================= DASHBOARD =========================
-    # =====================================================
-
+def _build_dashboard_sheet(wb, metrics):
     ws_dash = wb.active
     ws_dash.title = "Dashboard"
 
     ws_dash["A1"] = "Portfolio Summary"
     ws_dash["A1"].font = Font(size=14, bold=True)
 
-    total_assets = len(metrics)
-    avg_sharpe = metrics["Sharpe Ratio"].mean()
-    avg_vol = metrics["Volatility 1Y"].mean()
-    avg_cagr = metrics["CAGR 3Y"].mean()
-    avg_dd = metrics["Max Drawdown"].mean()
-
     ws_dash["A3"] = "Number of Assets"
-    ws_dash["B3"] = total_assets
+    ws_dash["B3"] = len(metrics)
 
     ws_dash["A4"] = "Average Sharpe"
-    ws_dash["B4"] = avg_sharpe
+    ws_dash["B4"] = metrics["Sharpe Ratio"].mean()
     ws_dash["B4"].number_format = "0.00"
 
     ws_dash["A5"] = "Average Volatility"
-    ws_dash["B5"] = avg_vol
+    ws_dash["B5"] = metrics["Volatility 1Y"].mean()
     ws_dash["B5"].number_format = "0.00%"
 
     ws_dash["A6"] = "Average CAGR 3Y"
-    ws_dash["B6"] = avg_cagr
+    ws_dash["B6"] = metrics["CAGR 3Y"].mean()
     ws_dash["B6"].number_format = "0.00%"
 
     ws_dash["A7"] = "Average Max Drawdown"
-    ws_dash["B7"] = avg_dd
+    ws_dash["B7"] = metrics["Max Drawdown"].mean()
     ws_dash["B7"].number_format = "0.00%"
 
     auto_adjust_columns(ws_dash)
 
-    # =====================================================
-    # ================= METRICS ===========================
-    # =====================================================
 
+def _build_metrics_sheet(wb, metrics, app_base_url):
     ws_metrics = wb.create_sheet("Metrics")
+    metrics = _sanitize_df_for_excel(metrics)
 
     for r in dataframe_to_rows(metrics, index=True, header=True):
         ws_metrics.append(r)
-    
-    # -----------------------------------------------------
-    # ADD HYPERLINK ONLY ON ETF NAME COLUMN
-    # -----------------------------------------------------
 
-    # Header row
+    # Add hyperlink only on the ETF Name column
     headers = [cell.value for cell in ws_metrics[1]]
-
-    # Trova colonna Name
-    if "Name" in headers:
-        name_col_index = headers.index("Name") + 1
-    else:
-        name_col_index = None
+    name_col_index = headers.index("Name") + 1 if "Name" in headers else None
 
     if name_col_index:
-
         for row in range(2, ws_metrics.max_row + 1):
-
-            # Colonna A = Ticker (indice)
-            ticker_value = ws_metrics.cell(row=row, column=1).value
-
-            # Colonna Name
+            ticker_value = ws_metrics.cell(row=row, column=1).value  # colonna A = Ticker (indice)
             name_cell = ws_metrics.cell(row=row, column=name_col_index)
-
             if ticker_value and name_cell.value:
-
-                url = f"http://localhost:8501/?ticker={ticker_value}"
-
-                name_cell.hyperlink = url
+                name_cell.hyperlink = f"{app_base_url}/?ticker={ticker_value}"
                 name_cell.style = "Hyperlink"
 
     ws_metrics.freeze_panes = "B2"
@@ -336,47 +299,47 @@ def export_to_excel(
     # if "Volatility 1Y" in metrics.columns and "Annual Return" in metrics.columns:
     #     add_efficient_frontier(ws_metrics)
 
-    # =====================================================
-    # ================= CORRELATION =======================
-    # =====================================================
 
+def _build_correlation_sheet(wb, correlation):
     ws_corr = wb.create_sheet("Correlation")
+    correlation = _sanitize_df_for_excel(correlation)
 
     for r in dataframe_to_rows(correlation, index=True, header=True):
         ws_corr.append(r)
 
     ws_corr.freeze_panes = "B2"
-
     auto_adjust_columns(ws_corr)
     add_correlation_heatmap(ws_corr)
 
-    # =====================================================
-    # ================= MAX SHARPE ========================
-    # =====================================================
 
-    ws_max = wb.create_sheet("Max_Sharpe_Weights")
+def _build_weights_sheet(wb, sheet_name, weights):
+    ws = wb.create_sheet(sheet_name)
+    weights_df = _sanitize_df_for_excel(weights.to_frame("Weight"))
 
-    for r in dataframe_to_rows(
-        max_sharpe.to_frame("Weight"), index=True, header=True
-    ):
-        ws_max.append(r)
+    for r in dataframe_to_rows(weights_df, index=True, header=True):
+        ws.append(r)
 
-    auto_adjust_columns(ws_max)
-    format_weights(ws_max)
+    auto_adjust_columns(ws)
+    format_weights(ws)
 
-    # =====================================================
-    # ================= MIN VOL ===========================
-    # =====================================================
 
-    ws_min = wb.create_sheet("Min_Vol_Weights")
+def export_to_excel(
+    metrics,
+    correlation,
+    max_sharpe,
+    min_vol,
+    weekly_seasonality,
+    output_path,
+    app_base_url: str = "http://localhost:8501",
+):
+    """Export portfolio results to formatted Excel report with Dashboard."""
+    wb = Workbook()
 
-    for r in dataframe_to_rows(
-        min_vol.to_frame("Weight"), index=True, header=True
-    ):
-        ws_min.append(r)
-
-    auto_adjust_columns(ws_min)
-    format_weights(ws_min)
-
+    _build_dashboard_sheet(wb, metrics)
+    _build_metrics_sheet(wb, metrics, app_base_url)
+    _build_correlation_sheet(wb, correlation)
+    _build_weights_sheet(wb, "Max_Sharpe_Weights", max_sharpe)
+    _build_weights_sheet(wb, "Min_Vol_Weights", min_vol)
     add_seasonality_sheet(wb, weekly_seasonality)
+
     wb.save(output_path)

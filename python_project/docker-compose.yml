@@ -1,0 +1,21 @@
+version: '3.9'
+
+services:
+  etf-analyzer:
+    build: .
+    container_name: etf-analyzer
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist uploaded data and generated reports outside the container
+      - ./data:/app/data
+      - ./output:/app/output
+    environment:
+      - ETF_PORT=8000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/').read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s

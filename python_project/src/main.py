@@ -1,8 +1,19 @@
 """Main portfolio execution script (stable professional version)."""
 
+import sys
 import pandas as pd
 from pathlib import Path
-from analytics import fetch_prices, compute_metrics
+
+
+def _bar(step: int, total: int, label: str = "") -> None:
+    """Print an inline ASCII progress bar."""
+    filled = int(40 * step / total)
+    bar = "█" * filled + "░" * (40 - filled)
+    pct = int(100 * step / total)
+    print(f"  [{bar}] {pct:3d}%  {label}", flush=True)
+
+
+from analytics import fetch_prices, compute_metrics, validate_data_quality
 from optimization import optimize_portfolios
 from excel_export import export_to_excel
 from risk_metrics import (
@@ -12,6 +23,7 @@ from risk_metrics import (
     compute_max_drawdown
 )
 from seasonality import compute_weekly_seasonality_multi
+from country import detect_country
 
 # ------------------ Paths ------------------
 
@@ -28,33 +40,11 @@ OUTPUT_FILE = OUTPUT_DIR / "portfolio_analysis.xlsx"
 BENCHMARK = "IWDA.AS"
 
 
-# ------------------ Country Detection ------------------
-
-def detect_country(ticker: str) -> str:
-
-    exchange_map = {
-        ".L": "UK",
-        ".IL": "UK",
-        ".PA": "France",
-        ".DE": "Germany",
-        ".F": "Germany",
-        ".MU": "Germany",
-        ".MI": "Italy",
-        ".SW": "Switzerland",
-        ".AS": "Netherlands",
-        ".SI": "Singapore"
-    }
-
-    for suffix, country in exchange_map.items():
-        if ticker.endswith(suffix):
-            return country
-
-    return "Other"
-
-
 # ------------------ Main ------------------
 
 def main():
+
+    TOTAL_STEPS = 8
 
     print("\n" + "=" * 60)
     print("PORTFOLIO ANALYSIS PIPELINE STARTED")
@@ -64,7 +54,7 @@ def main():
     # LOAD MAPPING
     # --------------------------------------------------
 
-    print("Loading mapping file...")
+    _bar(0, TOTAL_STEPS, "Caricamento mapping...")
     mapping_df = pd.read_csv(MAPPING_FILE)
     mapping_df.columns = mapping_df.columns.str.strip()
 
@@ -85,30 +75,52 @@ def main():
     if BENCHMARK not in tickers:
         tickers.append(BENCHMARK)
 
-    print(f"Tickers loaded: {len(tickers)}")
+    _bar(1, TOTAL_STEPS, f"Mapping caricato: {len(tickers)} ticker")
 
     # --------------------------------------------------
     # DOWNLOAD DATA
     # --------------------------------------------------
 
-    print("\nDownloading market data...")
+    _bar(1, TOTAL_STEPS, "Scaricamento dati di mercato (Yahoo Finance)...")
     prices = fetch_prices(tickers)
+    _bar(2, TOTAL_STEPS, f"Dati scaricati: {prices.shape[1]} asset  |  {prices.index.min().date()} → {prices.index.max().date()}")
 
-    print(f"Assets with data: {prices.shape[1]}")
-    print(f"Date range: {prices.index.min().date()} → {prices.index.max().date()}")
+    # --------------------------------------------------
+    # DATA QUALITY VALIDATION
+    # --------------------------------------------------
+
+    _bar(3, TOTAL_STEPS, "Validazione qualità dati...")
+    quality_report = validate_data_quality(prices)
+
+    valid_count = quality_report['valid_count']
+    total_count = quality_report['total_assets']
+    _bar(3, TOTAL_STEPS, f"Qualità: {valid_count}/{total_count} asset validi")
+
+    if quality_report['issues']:
+        print("  ⚠️  Issues:")
+        for issue in quality_report['issues'][:10]:
+            print(f"       - {issue}")
+    if quality_report['warnings']:
+        print("  ⚡  Warnings:")
+        for warn in quality_report['warnings'][:10]:
+            print(f"       - {warn}")
+
+    valid_tickers = [t for t in tickers if t in quality_report['valid_assets']]
+    if len(valid_tickers) < len(tickers):
+        tickers = valid_tickers
 
     # --------------------------------------------------
     # PERFORMANCE METRICS
     # --------------------------------------------------
 
-    print("\nComputing performance metrics...")
+    _bar(4, TOTAL_STEPS, "Calcolo metriche di performance...")
     metrics_perf, returns = compute_metrics(prices, BENCHMARK)
 
     # --------------------------------------------------
     # RISK METRICS
     # --------------------------------------------------
 
-    print("Computing risk metrics...")
+    _bar(5, TOTAL_STEPS, "Calcolo metriche di rischio (Sharpe, Beta, Drawdown)...")
 
     risk_df = pd.DataFrame({
         "Volatility 1Y": compute_volatility(returns),
@@ -133,8 +145,6 @@ def main():
     # --------------------------------------------------
     # ADD ETF NAMES (SAFE LOOKUP)
     # --------------------------------------------------
-
-    print("Merging ETF names...")
 
     original_df = pd.read_csv(ORIGINAL_FILE)
 
@@ -180,7 +190,7 @@ def main():
     # PORTFOLIO OPTIMIZATION
     # --------------------------------------------------
 
-    print("\nRunning portfolio optimization...")
+    _bar(6, TOTAL_STEPS, "Ottimizzazione portafoglio (Monte Carlo)...")
     correlation = returns.corr()
     max_sharpe_dict, min_vol_dict = optimize_portfolios(returns)
 
@@ -213,13 +223,14 @@ def main():
             lambda x: name_lookup.get(x, x)
         )
 
+    _bar(7, TOTAL_STEPS, "Calcolo stagionalità settimanale...")
     weekly_seasonality = compute_weekly_seasonality_multi(returns)
 
     # --------------------------------------------------
     # EXPORT
     # --------------------------------------------------
 
-    print("\nExporting Excel report...")
+    _bar(7, TOTAL_STEPS, "Esportazione report Excel...")
 
     export_to_excel(
         metrics,
@@ -230,6 +241,7 @@ def main():
         OUTPUT_FILE
     )
 
+    _bar(8, TOTAL_STEPS, "Completato!")
     print("\n" + "=" * 60)
     print("ANALYSIS COMPLETED SUCCESSFULLY")
     print(f"Output file: {OUTPUT_FILE}")

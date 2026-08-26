@@ -1,0 +1,14 @@
+[project]
+name = "spy-rsi-project"
+version = "0.1.0"
+description = "RSI mean-reversion backtest su SPY"
+requires-python = ">=3.11"
+dependencies = [
+    "yfinance>=0.2",
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "matplotlib>=3.7",
+]
+
+[tool.uv]
+dev-dependencies = []
