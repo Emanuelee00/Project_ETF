@@ -16,7 +16,7 @@ def backtest(
     risk_pct: float = None,
     stop_mult: float = None,
     target_mult: float = None,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+) -> tuple[pd.DataFrame, pd.DataFrame, dict | None]:
     capital = capital if capital is not None else config.INITIAL_CAPITAL
     risk_pct = risk_pct if risk_pct is not None else config.RISK_PER_TRADE
     stop_mult = stop_mult if stop_mult is not None else config.ATR_STOP_MULT
@@ -25,6 +25,7 @@ def backtest(
     equity = capital
     position = 0  # +1 long, -1 short, 0 flat
     qty = entry_price = stop_price = target_price = 0.0
+    entry_time = None
     equity_curve = []
     trades = []
 
@@ -46,13 +47,25 @@ def backtest(
             if exit_price is not None:
                 pnl = (exit_price - entry_price) * qty * position
                 equity += pnl
-                trades.append({"exit": index[i], "pnl": pnl, "win": pnl > 0})
+                trades.append({
+                    "direction": "long" if position == 1 else "short",
+                    "entry_time": entry_time,
+                    "entry_price": entry_price,
+                    "exit_time": index[i],
+                    "exit_price": exit_price,
+                    "stop_price": stop_price,
+                    "target_price": target_price,
+                    "qty": qty,
+                    "pnl": pnl,
+                    "win": pnl > 0,
+                })
                 position = 0
                 qty = 0.0
 
         if position == 0 and signals[i] != 0 and pd.notna(atrs[i]) and atrs[i] > 0:
             direction = int(signals[i])
             entry_price = price
+            entry_time = index[i]
             stop_dist = atrs[i] * stop_mult
             stop_price = entry_price - direction * stop_dist
             target_price = entry_price + direction * atrs[i] * target_mult
@@ -63,9 +76,22 @@ def backtest(
         open_pnl = (price - entry_price) * qty * position if position != 0 else 0.0
         equity_curve.append(equity + open_pnl)
 
+    open_position = None
+    if position != 0:
+        # posizione ancora aperta sull'ultima barra — usato dal monitor live (monitor.py) per
+        # sapere se c'è un trade in corso adesso, che qui non compare mai tra i `trades` chiusi
+        open_position = {
+            "direction": "long" if position == 1 else "short",
+            "entry_time": entry_time,
+            "entry_price": entry_price,
+            "stop_price": stop_price,
+            "target_price": target_price,
+            "qty": qty,
+        }
+
     result = data.copy()
     result["equity"] = equity_curve
-    return result, pd.DataFrame(trades)
+    return result, pd.DataFrame(trades), open_position
 
 
 def buy_and_hold(data: pd.DataFrame, capital: float = None) -> pd.DataFrame:

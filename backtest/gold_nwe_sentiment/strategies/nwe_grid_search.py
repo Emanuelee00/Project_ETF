@@ -64,7 +64,7 @@ def run_grid_search(
             frame.loc[long_entry, "signal"] = 1
             frame.loc[short_entry, "signal"] = -1
 
-            bt, trades = backtest(frame, capital, risk_pct, stop_mult, target_mult)
+            bt, trades, _ = backtest(frame, capital, risk_pct, stop_mult, target_mult)
             if len(trades) < min_trades:
                 continue
 

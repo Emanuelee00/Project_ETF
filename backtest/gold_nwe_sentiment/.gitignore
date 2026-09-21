@@ -4,7 +4,11 @@ __pycache__/
 equity_curve.png
 strategy_overview.png
 gold_sentiment_15m.json
+trades_nwe.json
 results_nwe_sentiment_optimization.csv
 results_variants_comparison.csv
 results_nwe_grid_search.csv
 best_nwe_params.json
+best_strategy_config.json
+monitor_state.json
+.env

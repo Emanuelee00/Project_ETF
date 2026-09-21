@@ -51,7 +51,7 @@ def optimize(
             )
 
             for stop_mult, target_mult in itertools.product(stop_range, target_range):
-                bt, trades = backtest(signals, capital, risk_pct, stop_mult, target_mult)
+                bt, trades, _ = backtest(signals, capital, risk_pct, stop_mult, target_mult)
                 if len(trades) < min_trades:
                     continue
                 eq = bt["equity"].to_numpy()

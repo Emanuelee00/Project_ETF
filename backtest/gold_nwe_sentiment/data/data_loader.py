@@ -10,7 +10,7 @@ web) regolarmente.
 
 import sqlite3
 from contextlib import closing
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -73,8 +73,10 @@ def _upsert(conn: sqlite3.Connection, ticker: str, interval: str, df: pd.DataFra
         rows,
     )
     conn.execute(
+        # naive, senza timezone: data_cache.py (python_project) confronta con datetime.now()
+        # anch'esso naive — un timestamp aware qui rompe _is_stale() lì con un TypeError
         "INSERT OR REPLACE INTO meta (ticker,interval,last_dl) VALUES (?,?,?)",
-        (ticker.upper(), interval, datetime.now(timezone.utc).isoformat()),
+        (ticker.upper(), interval, datetime.now().isoformat()),
     )
     conn.commit()
 

@@ -15,7 +15,7 @@ from backtest.engine import backtest, buy_and_hold
 from data.data_loader import load_daily_sentiment, load_price_data
 from optimization.optimizer import compare_variants
 from strategies.nwe_sentiment_strategy import build_signals
-from utils.export import export_sentiment_json
+from utils.export import export_sentiment_json, export_trades_json
 from utils.metrics import max_drawdown, sharpe_ratio, total_return
 from utils.plot import plot_strategy
 
@@ -89,7 +89,7 @@ def main():
         bandwidth=best["bandwidth"], multiplier=best["multiplier"], sentiment_veto=best["sentiment_veto"],
         use_confirmation=best_variant["use_confirmation"], use_trend_filter=best_variant["use_trend_filter"],
     )
-    bt, trades = backtest(signals, capital, config.RISK_PER_TRADE, best["atr_stop"], best["atr_target"])
+    bt, trades, _ = backtest(signals, capital, config.RISK_PER_TRADE, best["atr_stop"], best["atr_target"])
     eq = bt["equity"].to_numpy()
 
     bh = buy_and_hold(data, capital)
@@ -109,6 +109,23 @@ def main():
 
     json_path = export_sentiment_json(bt)
     print(f"Serie sentiment (score + etichetta per barra) esportata in {json_path}")
+
+    trades_path = export_trades_json(trades)
+    print(f"{len(trades)} trade esportati in {trades_path} — il sito li legge da lì, senza ricalcolare nulla")
+
+    best_config = {
+        "bandwidth": float(best["bandwidth"]),
+        "multiplier": float(best["multiplier"]),
+        "sentiment_veto": float(best["sentiment_veto"]),
+        "atr_stop": float(best["atr_stop"]),
+        "atr_target": float(best["atr_target"]),
+        "use_confirmation": best_variant["use_confirmation"],
+        "use_trend_filter": best_variant["use_trend_filter"],
+        "variant": best["variant"],
+    }
+    with open(config.BEST_STRATEGY_CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(best_config, f, indent=2)
+    print(f"Configurazione completa della strategia migliore salvata in {config.BEST_STRATEGY_CONFIG_PATH} (usata da 'make monitor')")
 
     plot_strategy(
         bt,

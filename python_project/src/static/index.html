@@ -1120,8 +1120,10 @@ const INDICATOR_CONFIG=[
   {id:'nwRepaint',label:'N-W Repaint',color:'#14b8a6',params:[['h','bandwidth',8,1,100],['mult','moltiplicatore',3,1,10]]},
   {id:'nwNoRepaint',label:'N-W No Repaint',color:'#60a5fa',params:[['h','bandwidth',8,1,100],['mult','moltiplicatore',3,1,10]]},
   {id:'piv',label:'Pivot',color:'#94a3b8',params:[]},
+  {id:'nweTrades',label:'Strategia NWE',color:'#eab308',params:[]},
+  {id:'goldSentiment',label:'Sentiment Oro',color:'#facc15',params:[]},
 ];
-const INDICATOR_DEFAULTS={sma:true,ema:true,rsi:true,nwRepaint:true,nwNoRepaint:false,piv:true};
+const INDICATOR_DEFAULTS={sma:true,ema:true,rsi:true,nwRepaint:true,nwNoRepaint:false,piv:true,nweTrades:false,goldSentiment:false};
 let indSt={...INDICATOR_DEFAULTS};
 let indParams={};
 function _restoreIndicators(){
@@ -1217,10 +1219,11 @@ async function loadChart(ticker,period,interval){
   loading.style.display='flex';
   try{
     const url=`/api/chart/${encodeURIComponent(ticker)}?period=${period}&interval=${interval||'1d'}`;
+    const wantGoldSentiment=!!indSt.goldSentiment;
     const goldUrl=`/api/gold-sentiment/${encodeURIComponent(ticker)}?period=${period}&interval=${interval||'1d'}`;
     const [res,goldRes]=await Promise.all([
       fetch(url),
-      fetch(goldUrl).catch(()=>null),
+      wantGoldSentiment?fetch(goldUrl).catch(()=>null):Promise.resolve(null),
     ]);
     if(!res.ok)throw new Error(`HTTP ${res.status}`);
     const data=await res.json();
@@ -1239,6 +1242,7 @@ async function loadChart(ticker,period,interval){
 
 /* ── lightweight-charts engine ── */
 let _lwChart=null,_lwRsiChart=null,_lwRobs=null,_lwRRobs=null;
+let _nweTrades=null;
 const _lwS={};
 
 function _lwDestroy(){
@@ -1246,6 +1250,8 @@ function _lwDestroy(){
   if(_lwRRobs){_lwRRobs.disconnect();_lwRRobs=null;}
   if(_lwChart){_lwChart.remove();_lwChart=null;}
   if(_lwRsiChart){_lwRsiChart.remove();_lwRsiChart=null;}
+  const nc=document.getElementById('nwe-trades-canvas');if(nc)nc.remove();
+  _nweTrades=null;
   Object.keys(_lwS).forEach(k=>delete _lwS[k]);
   const vp=document.getElementById('vp-canvas');if(vp)vp.remove();
   const tt=document.getElementById('lw-tt');if(tt)tt.remove();
@@ -1370,6 +1376,9 @@ function renderChart(ticker,rows,interval,goldMarkers){
     if(indSt.rsi)_setupRsiChart(rows);
     // Volume Profile canvas
     if(rows.length>20)_drawVP(rows,mainWrap);
+    // Strategia NWE: box entry/stop/target dei trade già calcolati (letti una volta, mai ricalcolati qui)
+    if(indSt.nweTrades)_setupNweTrades(mainWrap);
+    else _nweTrades=null;
     // Sidebar price/change
     if(close.length>=2){
       const last=close[close.length-1],prev=close[close.length-2];
@@ -1388,7 +1397,11 @@ function renderChart(ticker,rows,interval,goldMarkers){
   }
 
   _lwChart.timeScale().fitContent();
-  _lwRobs=new ResizeObserver(()=>{if(_lwChart)_lwChart.applyOptions({width:mainWrap.clientWidth,height:mainWrap.clientHeight});});
+  _lwRobs=new ResizeObserver(()=>{
+    if(!_lwChart)return;
+    _lwChart.applyOptions({width:mainWrap.clientWidth,height:mainWrap.clientHeight});
+    if(_nweTrades)_drawNweTrades(mainWrap);
+  });
   _lwRobs.observe(mainWrap);
 }
 
@@ -1447,6 +1460,64 @@ function _drawVP(rows,container){
   ctx.fillStyle='rgba(0,212,255,0.9)';ctx.font='bold 8px Consolas';ctx.textAlign='right';
   const pocY=H-((poc+0.5)/BINS)*H;
   ctx.fillText('POC',W-2,pocY+3);
+}
+
+async function _setupNweTrades(container){
+  const old=document.getElementById('nwe-trades-canvas');if(old)old.remove();
+  try{
+    const res=await fetch('/api/gold-nwe-trades');
+    _nweTrades=res.ok?(await res.json()).trades||[]:[];
+  }catch(_){_nweTrades=[];}
+  if(!_nweTrades.length||!_lwChart||!_lwS.candle)return;
+
+  const cvs=document.createElement('canvas');
+  cvs.id='nwe-trades-canvas';
+  cvs.style.cssText='position:absolute;left:0;top:0;pointer-events:none;z-index:4';
+  container.appendChild(cvs);
+
+  _lwChart.timeScale().subscribeVisibleLogicalRangeChange(()=>{if(_nweTrades)_drawNweTrades(container);});
+  _drawNweTrades(container);
+}
+
+function _drawNweTrades(container){
+  const cvs=document.getElementById('nwe-trades-canvas');
+  if(!cvs||!_lwChart||!_lwS.candle||!_nweTrades)return;
+  const W=container.clientWidth,H=container.clientHeight;
+  cvs.width=W;cvs.height=H;cvs.style.width=W+'px';cvs.style.height=H+'px';
+  const ctx=cvs.getContext('2d');
+  ctx.clearRect(0,0,W,H);
+
+  const ts=_lwChart.timeScale();
+  _nweTrades.forEach(t=>{
+    const x1=ts.timeToCoordinate(t.entry_time),x2=ts.timeToCoordinate(t.exit_time);
+    if(x1==null||x2==null)return;
+    const yEntry=_lwS.candle.priceToCoordinate(t.entry_price);
+    const yExit=_lwS.candle.priceToCoordinate(t.exit_price);
+    const yStop=_lwS.candle.priceToCoordinate(t.stop_price);
+    const yTarget=_lwS.candle.priceToCoordinate(t.target_price);
+    if([yEntry,yExit,yStop,yTarget].some(y=>y==null))return;
+
+    const left=Math.min(x1,x2),width=Math.max(Math.abs(x2-x1),2);
+
+    ctx.fillStyle='rgba(239,68,68,0.18)';
+    ctx.fillRect(left,Math.min(yEntry,yStop),width,Math.abs(yStop-yEntry)||1);
+    ctx.fillStyle='rgba(16,185,129,0.18)';
+    ctx.fillRect(left,Math.min(yEntry,yTarget),width,Math.abs(yTarget-yEntry)||1);
+
+    ctx.lineWidth=1;
+    ctx.strokeStyle='rgba(239,68,68,0.75)';
+    ctx.beginPath();ctx.moveTo(left,yStop);ctx.lineTo(left+width,yStop);ctx.stroke();
+    ctx.strokeStyle='rgba(16,185,129,0.75)';
+    ctx.beginPath();ctx.moveTo(left,yTarget);ctx.lineTo(left+width,yTarget);ctx.stroke();
+
+    ctx.setLineDash([3,3]);
+    ctx.strokeStyle=t.win?'#10b981':'#ef4444';
+    ctx.beginPath();ctx.moveTo(x1,yEntry);ctx.lineTo(x2,yExit);ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle=t.direction==='long'?'#10b981':'#ef4444';
+    ctx.beginPath();ctx.arc(x1,yEntry,3,0,Math.PI*2);ctx.fill();
+  });
 }
 
 function _fmtTooltipTime(t){

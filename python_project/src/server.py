@@ -35,6 +35,7 @@ from seasonality import compute_weekly_seasonality_multi
 from excel_export import export_to_excel
 from chart_backend import get_chart_payload
 from gold_sentiment import get_gold_sentiment_markers
+from gold_nwe_trades import get_nwe_trades
 from country import detect_country
 from data_cache import cache_stats, background_download_all
 
@@ -590,6 +591,19 @@ async def gold_sentiment_endpoint(ticker: str, period: str = "1mo", interval: st
     try:
         markers = await asyncio.to_thread(get_gold_sentiment_markers, ticker, period, interval)
         return {"markers": markers}
+    except Exception as exc:
+        raise HTTPException(500, str(exc))
+
+
+@app.get("/api/gold-nwe-trades")
+async def gold_nwe_trades_endpoint():
+    """Trade già calcolati da 'make gold-nwe' (backtest/gold_nwe_sentiment/trades_nwe.json).
+
+    Legge solo il file — non rilancia mai il backtest, per restare istantaneo dal grafico web.
+    """
+    try:
+        trades = await asyncio.to_thread(get_nwe_trades)
+        return {"trades": trades}
     except Exception as exc:
         raise HTTPException(500, str(exc))
 

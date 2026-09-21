@@ -1,6 +1,26 @@
 """Parametri globali: strategia Nadaraya-Watson Envelope (no-repaint) + filtro sentiment sull'oro."""
 
+import os
+from pathlib import Path
+
 import numpy as np
+
+
+def _load_dotenv() -> None:
+    """Piccolo loader manuale (niente dipendenza python-dotenv): legge .env se presente,
+    senza sovrascrivere variabili già impostate nell'ambiente."""
+    env_path = Path(__file__).resolve().parent / ".env"
+    if not env_path.exists():
+        return
+    for line in env_path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip())
+
+
+_load_dotenv()
 
 TICKER = "GC=F"
 INTERVAL = "15m"
@@ -54,6 +74,20 @@ FINE_MULTIPLIER_RANGE = np.round(np.arange(0.1, 20.0 + 1e-9, 0.1), 2)
 # File di handoff: run_nwe_grid_search.py ci scrive il bandwidth/multiplier migliore trovato,
 # main.py li legge (se presenti) al posto di BANDWIDTH_RANGE/MULTIPLIER_RANGE
 BEST_NWE_PARAMS_PATH = "best_nwe_params.json"
+
+# main.py ci scrive la configurazione completa della variante vincente (bandwidth, multiplier,
+# soglia sentiment, stop/target ATR, quali filtri usare) — monitor.py la legge per sapere
+# esattamente cosa controllare ad ogni giro, senza rifare la grid search dal vivo
+BEST_STRATEGY_CONFIG_PATH = "best_strategy_config.json"
+
+# --- Monitor live (monitor.py) ---
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
+MONITOR_INTERVAL_SECONDS = 60
+MONITOR_STATE_PATH = "monitor_state.json"
+# Finestra scaricata ad ogni controllo: piccola apposta, la cache locale conserva comunque
+# tutto lo storico accumulato (vedi data/data_loader.py) — qui basta l'ultimo aggiornamento
+MONITOR_REFRESH_PERIOD = "5d"
 
 # DB del sentiment giornaliero salvato da gold_agent (cartella sibling)
 GOLD_SENTIMENT_DB = "../../gold_agent/gold_sentiment.db"
