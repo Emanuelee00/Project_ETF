@@ -1217,12 +1217,17 @@ async function loadChart(ticker,period,interval){
   loading.style.display='flex';
   try{
     const url=`/api/chart/${encodeURIComponent(ticker)}?period=${period}&interval=${interval||'1d'}`;
-    const res=await fetch(url);
+    const goldUrl=`/api/gold-sentiment/${encodeURIComponent(ticker)}?period=${period}&interval=${interval||'1d'}`;
+    const [res,goldRes]=await Promise.all([
+      fetch(url),
+      fetch(goldUrl).catch(()=>null),
+    ]);
     if(!res.ok)throw new Error(`HTTP ${res.status}`);
     const data=await res.json();
     const rows=data.rows||[];
     if(!rows.length)throw new Error('Nessun dato disponibile');
-    renderChart(ticker,rows,interval||'1d');
+    const goldMarkers=(goldRes&&goldRes.ok)?(await goldRes.json()).markers||[]:[];
+    renderChart(ticker,rows,interval||'1d',goldMarkers);
   } catch(err){
     _lwDestroy();
     const wrap=document.getElementById('lw-main-wrap');
@@ -1248,7 +1253,7 @@ function _lwDestroy(){
   if(rsiWrap){rsiWrap.style.height='0';rsiWrap.classList.remove('vis');}
 }
 
-function renderChart(ticker,rows,interval){
+function renderChart(ticker,rows,interval,goldMarkers){
   _lwDestroy();
   const mainWrap=document.getElementById('lw-main-wrap');
   if(!mainWrap||!rows.length)return;
@@ -1285,17 +1290,30 @@ function renderChart(ticker,rows,interval){
     });
     cs.setData(rows.filter(r=>r.open!=null).map(r=>({time:r.date,open:r.open,high:r.high,low:r.low,close:r.close})));
     _lwS.candle=cs;
-    // Strategy signals overlay
+    // Strategy signals overlay + gold sentiment overlay (dallo storico LLM di gold_agent)
     const sigs=_stSignals[ticker.toUpperCase()]||[];
-    if(sigs.length){
-      cs.setMarkers(sigs.map(s=>({
+    const goldMk=(goldMarkers||[]).map(m=>({
+      time:m.time,
+      position:'belowBar',
+      color:m.signal==='BUY'?'#10b981':'#ef4444',
+      shape:'circle',
+      text:'',
+      size:1,
+    }));
+    const allMarkers=[
+      ...sigs.map(s=>({
         time:s.date,
         position:s.type==='buy'?'belowBar':'aboveBar',
         color:s.type==='buy'?'#10b981':'#ef4444',
         shape:s.type==='buy'?'arrowUp':'arrowDown',
         text:s.type==='buy'?'B':'S',
         size:1,
-      })));
+      })),
+      ...goldMk,
+    ];
+    if(allMarkers.length){
+      allMarkers.sort((a,b)=>a.time>b.time?1:(a.time<b.time?-1:0));
+      cs.setMarkers(allMarkers);
     }
 
     // Volume histogram on separate scale

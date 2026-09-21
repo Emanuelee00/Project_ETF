@@ -1,0 +1,15 @@
+[project]
+name = "gold-agent"
+version = "0.1.0"
+description = "Ciclo agentico LangGraph per l'analisi del sentiment sulle notizie relative all'oro, con LLM locale via Ollama"
+requires-python = ">=3.12"
+dependencies = [
+    "langgraph>=0.2",
+    "langchain-core>=0.3",
+    "langchain-ollama>=0.2",
+    "yfinance>=1.2",
+    "requests>=2.32",
+]
+
+[tool.uv]
+dev-dependencies = []

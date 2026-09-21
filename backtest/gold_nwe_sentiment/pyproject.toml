@@ -1,0 +1,14 @@
+[project]
+name = "gold-nwe-sentiment"
+version = "0.1.0"
+description = "Backtest: mean-reversion sulla banda Nadaraya-Watson (no-repaint) sull'oro, filtrata dal sentiment giornaliero di gold_agent"
+requires-python = ">=3.12"
+dependencies = [
+    "yfinance>=1.2",
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "matplotlib>=3.7",
+]
+
+[tool.uv]
+dev-dependencies = []

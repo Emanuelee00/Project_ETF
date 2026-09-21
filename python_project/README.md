@@ -15,6 +15,7 @@ python_project/
 │   ├── server.py            # FastAPI app (web UI + API)
 │   ├── chart_backend.py     # OHLCV chart data (cache-first, yfinance/stooq fallback)
 │   ├── data_cache.py        # SQLite OHLCV cache
+│   ├── gold_sentiment.py    # Legge gold_agent/gold_sentiment.db per i marker BUY/SELL sul grafico
 │   ├── main.py               # CLI pipeline entry point
 │   ├── analytics.py          # Performance metrics
 │   ├── risk_metrics.py       # Risk metrics
@@ -31,6 +32,16 @@ python_project/
 ├── output/                     # Generated Excel reports
 ├── Dockerfile / docker-compose.yml
 └── pyproject.toml / uv.lock
+```
+
+Accanto a `python_project/` (livello `Project_ETF/`, non dentro), due progetti indipendenti con il proprio `pyproject.toml`/`venv` uv:
+
+```
+Project_ETF/
+├── python_project/            # questo progetto
+├── gold_agent/                 # ciclo agentico LangGraph: sentiment sulle notizie dell'oro (LLM locale via Ollama)
+└── backtest/
+    └── gold_nwe_sentiment/     # backtest: banda Nadaraya-Watson + filtro sentiment su GC=F a 15 minuti
 ```
 
 ---
@@ -80,6 +91,28 @@ make main
 ```
 
 Reads `data/himalaya.xlsx` (or the configured input file), resolves ISINs to tickers via `data/isin_ticker_mapping.csv`, downloads prices, computes metrics, and writes a full Excel report to `output/`.
+
+---
+
+## 🥇 Strumenti oro: sentiment agent + backtest NWE
+
+Due progetti indipendenti (`../gold_agent/`, `../backtest/gold_nwe_sentiment/`, vedi struttura sopra), lanciabili anche da qui:
+
+```bash
+# Ciclo agentico LangGraph: notizie sull'oro → sentiment via LLM locale (Ollama) → storico giornaliero
+make news MARKET=oro     # per ora supporta solo "oro"
+
+# Grid search fine (0.1→20.0, passo 0.1) sulla sola banda Nadaraya-Watson, salva la configurazione migliore
+make gold-nwe-set-best
+
+# Backtest completo: banda NWE (quella trovata sopra, se presente) + filtro sentiment + stop/target ATR,
+# confronto di varianti (candela di conferma / filtro trend) e benchmark buy & hold — chiede il capitale iniziale
+make gold-nwe
+```
+
+I marker BUY/SELL calcolati da `gold_agent` compaiono anche nel grafico della web app (tab **Chart**, ticker oro tipo `GC=F`) grazie a `src/gold_sentiment.py`.
+
+⚠️ Yahoo Finance non fornisce barre a 15 minuti più vecchie di ~60 giorni: `backtest/gold_nwe_sentiment` mantiene una cache SQLite (condivisa con `data/ohlcv_cache.db`) che accumula storico oltre quel limite ad ogni run, invece di ripartire sempre da 60 giorni.
 
 ---
 
